@@ -215,6 +215,11 @@ func pointsAreOrthogonal(p1 Pt, p2 Pt) bool {
 func InitSnakeGame(height int, width int, inputStream <-chan rune) GameState {
 	snake := []Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}}
 	initialDirection := Pt{0, 1}
+	// TODO: Instead of doing all this "buildDefault" stuff could we just make
+	// a new struct type containing these "default" things then define the 0
+	// value of those struct members to be the result of these functions? This
+	// might be able to help in this issue and others:
+	// https://peter.bourgon.org/go-best-practices-2016/#program-design
 	foodGenerator := buildDefaultFoodGenerator()
 	food := foodGenerator.generateFood(height, width, snake)
 	inputGetter := buildDefaultInputGetter(inputStream)

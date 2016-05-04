@@ -203,6 +203,8 @@ func TestGameBehavesAsExpectedGivenInput(t *testing.T) {
 		gameState.inputGetter = test.gameInput
 		gameState.Sleeper = ms
 		GameLoop(test.renderer, gameState)
+		// TODO: Go preferrs tests to say got this want this instead of the
+		// reverse like I'm doing here. Fix this.
 		if len(test.wantSnakeStates) != len(test.renderer.gameStates) {
 			t.Errorf("want %d iterations of the game loop, got %d", len(test.wantSnakeStates), len(test.renderer.gameStates))
 		} else {
