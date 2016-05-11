@@ -6,10 +6,6 @@ import (
 	"github.com/lag13/snake/Go/snakegame"
 )
 
-// TODO: See if we can get testing around the rendering stuff. Like we can
-// make an abstraction for the rendering code and then we can test that? Or is
-// that just helpful/not worth it/doesn't make any sense to do.
-
 type clearScreen func()
 
 type drawCell func(x int, y int, ch rune)
@@ -22,46 +18,99 @@ type simpleRenderer struct {
 	refresh refreshScreen
 }
 
-func (sr simpleRenderer) Render(gs snakegame.GameState) {
-	sr.clear()
-	drawBorder(sr.dc, gs.Height, gs.Width)
-	drawSnake(sr.dc, gs.Snake)
-	drawFood(sr.dc, gs.Food)
-	drawScore(sr.dc, gs.Height+1, len(gs.Snake))
-	sr.refresh()
+func spaceOutX(x int) int {
+	return 2 * x
+}
+
+func (r simpleRenderer) drawGameCell(x int, y int, ch rune) {
+	r.dc(spaceOutX(x)+spaceOutX(1), y+1, ch)
+}
+
+func (r simpleRenderer) Render(gs snakegame.GameState) {
+	r.clear()
+	r.drawBorder(gs.Height, gs.Width)
+	r.drawSnake(gs.Snake)
+	r.drawFood(gs.Food)
+	r.drawScore(gs.Height+2, gs.Score)
+	if gs.Paused {
+		r.drawPause(gs.Height/2, gs.Width)
+	}
+	r.refresh()
+}
+
+func (r simpleRenderer) drawPause(y int, x int) {
+	s := "[Paused]"
+	r.drawString(y, x-len(s)/2, s)
 }
 
 func NewSimpleRenderer(clear clearScreen, dc drawCell, refresh refreshScreen) simpleRenderer {
 	return simpleRenderer{clear, dc, refresh}
 }
 
-func drawBorder(dc drawCell, height int, width int) {
-	for y := 0; y < height; y++ {
-		dc(2*width, y, '|')
-	}
-	for x := 0; x < 2*width; x += 2 {
-		dc(x, height, '-')
-	}
-	dc(2*width, height, '+')
+func (r simpleRenderer) drawBorder(height int, width int) {
+	r.drawLeftBorder(height)
+	r.drawTopBorder(width)
+	r.drawRightBorder(height, spaceOutX(width+1))
+	r.drawBottomBorder(height+1, width)
+	r.drawCorners(height, width)
 }
 
-func drawSnake(dc drawCell, snake []snakegame.Pt) {
+func (r simpleRenderer) drawLeftBorder(height int) {
+	for y := 1; y <= height; y++ {
+		r.dc(0, y, '|')
+	}
+}
+
+func (r simpleRenderer) drawTopBorder(width int) {
+	for x := 1; x <= width; x++ {
+		r.dc(spaceOutX(x), 0, '-')
+	}
+}
+
+func (r simpleRenderer) drawRightBorder(height int, width int) {
+	for y := 1; y <= height; y++ {
+		r.dc(width, y, '|')
+	}
+}
+
+func (r simpleRenderer) drawBottomBorder(height int, width int) {
+	for x := 1; x <= width; x++ {
+		r.dc(spaceOutX(x), height, '-')
+	}
+}
+
+func (r simpleRenderer) drawCorners(height int, width int) {
+	// upper left
+	r.dc(0, 0, '+')
+	// lower left
+	r.dc(0, height+1, '+')
+	w := spaceOutX(width + 1)
+	// lower right
+	r.dc(w, height+1, '+')
+	// upper right
+	r.dc(w, 0, '+')
+}
+
+func (r simpleRenderer) drawSnake(snake []snakegame.Pt) {
 	for _, pt := range snake {
-		dc(2*pt.X, pt.Y, '#')
+		r.drawGameCell(pt.X, pt.Y, '#')
 	}
 }
 
-func drawFood(dc drawCell, food snakegame.Pt) {
-	dc(2*food.X, food.Y, '@')
+func (r simpleRenderer) drawFood(food snakegame.Pt) {
+	r.drawGameCell(food.X, food.Y, '@')
 }
 
-func drawScore(dc drawCell, height int, score int) {
-	drawStringf(dc, height, 0, "Score: %d", score)
+func (r simpleRenderer) drawScore(height int, score int) {
+	r.drawStringf(height, 0, "Score: %d", score)
 }
 
-func drawStringf(dc drawCell, y int, x int, s string, args ...interface{}) {
-	str := fmt.Sprintf(s, args...)
-	for i, c := range str {
-		dc(x+i, y, c)
+func (r simpleRenderer) drawStringf(y int, x int, s string, args ...interface{}) {
+	r.drawString(y, x, fmt.Sprintf(s, args...))
+}
+
+func (r simpleRenderer) drawString(y int, x int, s string) {
+	for i, c := range s {
+		r.dc(x+i, y, c)
 	}
 }

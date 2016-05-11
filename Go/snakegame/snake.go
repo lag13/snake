@@ -23,6 +23,8 @@ type GameState struct {
 	Food          Pt
 	inputGetter   InputGetter
 	Sleeper       Sleeper
+	Score         int
+	Paused        bool
 }
 
 type InputGetter interface {
@@ -30,27 +32,24 @@ type InputGetter interface {
 }
 
 type defaultInputGetter struct {
-	lastInput rune
-	in        <-chan rune
+	in <-chan rune
 }
 
-// TODO: Make this only accept input that is "valid"
+// TODO: Make this only accept input that is "valid" for example if they enter
+// two 'h's in a row, the second 'h' is definitely an invalid move so just
+// discard it.
 // TODO: Should this be called something like humanInputGetter?
 func (g *defaultInputGetter) GetInput() rune {
 	select {
-	case g.lastInput = <-g.in:
+	case input := <-g.in:
+		return input
 	default:
+		return '\x00'
 	}
-	return g.lastInput
 }
 
-// TODO: We I'm passing in 'j' here so we move in the same direction as
-// dictated by curDirection. I shouldn't have to do this. Do we need
-// curDirection at all? Could the direction we're travelling in be stored
-// here? I could call it inputHandler instead and it will get input AND return
-// the appropriate direction?
 func buildDefaultInputGetter(inputStream <-chan rune) *defaultInputGetter {
-	return &defaultInputGetter{'j', inputStream}
+	return &defaultInputGetter{inputStream}
 }
 
 type Renderer interface {
@@ -99,7 +98,7 @@ type Pt struct {
 	Y int
 }
 
-func GameContinues(height int, width int, snake []Pt) bool {
+func gameContinues(height int, width int, snake []Pt) bool {
 	if snakeOutOfBounds(height, width, snake[0]) {
 		return false
 	}
@@ -150,12 +149,13 @@ func positionExists(ptToCheck Pt, pts []Pt) bool {
 	return false
 }
 
-func UpdateGameState(gs GameState) (newGameState GameState) {
+func updateGameState(gs GameState) (newGameState GameState) {
 	oldTail := gs.Snake[len(gs.Snake)-1]
 	newSnake := copySnake(gs.Snake)
 	newSnake = moveSnake(newSnake, gs.curDirection)
 	newFood := gs.Food
 	if newSnake[0] == newFood {
+		gs.Score++
 		newFood = gs.foodGenerator.generateFood(gs.Height, gs.Width, newSnake)
 		newSnake = append(newSnake, oldTail)
 	}
@@ -163,7 +163,7 @@ func UpdateGameState(gs GameState) (newGameState GameState) {
 	// object but the only two things that change are the snake and food
 	// postitions. Fix this, make it nicer. I feel doing this could also
 	// relate to how I don't like how big the GameState struct is.
-	return GameState{gs.Height, gs.Width, newSnake, gs.curDirection, gs.foodGenerator, newFood, gs.inputGetter, gs.Sleeper}
+	return GameState{gs.Height, gs.Width, newSnake, gs.curDirection, gs.foodGenerator, newFood, gs.inputGetter, gs.Sleeper, gs.Score, gs.Paused}
 }
 
 func copySnake(snake []Pt) []Pt {
@@ -181,7 +181,6 @@ func moveSnake(snake []Pt, direction Pt) []Pt {
 	return snake
 }
 
-// TODO: Make these constants?
 var (
 	left  = Pt{-1, 0}
 	down  = Pt{0, 1}
@@ -196,11 +195,10 @@ var inputToDirectionMap = map[rune]Pt{
 	'l': right,
 }
 
-func GetDirectionFromInput(input rune, currentDirection Pt) Pt {
+func getDirectionFromInput(input rune, currentDirection Pt) Pt {
 	dir, ok := inputToDirectionMap[input]
 	if !ok {
-		notOrthogonalToPossibleDirs := Pt{1, 1}
-		dir = notOrthogonalToPossibleDirs
+		return currentDirection
 	}
 	if pointsAreOrthogonal(dir, currentDirection) {
 		return dir
@@ -224,15 +222,32 @@ func InitSnakeGame(height int, width int, inputStream <-chan rune) GameState {
 	food := foodGenerator.generateFood(height, width, snake)
 	inputGetter := buildDefaultInputGetter(inputStream)
 	sleeper := buildDefaultSleeper()
-	return GameState{height, width, snake, initialDirection, foodGenerator, food, inputGetter, sleeper}
+	return GameState{height, width, snake, initialDirection, foodGenerator, food, inputGetter, sleeper, 0, false}
 }
 
-func GameLoop(r Renderer, gs GameState) {
-	for GameContinues(gs.Height, gs.Width, gs.Snake) {
+func userQuit(input rune) bool {
+	return input == 'q'
+}
+
+func userPaused(input rune) bool {
+	return input == 'p'
+}
+
+func GameLoop(r Renderer, gs GameState) int {
+	for gameContinues(gs.Height, gs.Width, gs.Snake) {
 		r.Render(gs)
 		gs.Sleeper.Sleep()
 		input := gs.inputGetter.GetInput()
-		gs.curDirection = GetDirectionFromInput(input, gs.curDirection)
-		gs = UpdateGameState(gs)
+		if userQuit(input) {
+			break
+		}
+		if userPaused(input) {
+			gs.Paused = !gs.Paused
+		}
+		if !gs.Paused {
+			gs.curDirection = getDirectionFromInput(input, gs.curDirection)
+			gs = updateGameState(gs)
+		}
 	}
+	return gs.Score
 }

@@ -24,9 +24,9 @@ func TestGameContinues(t *testing.T) {
 		{10, 10, []Pt{{0, 5}, {0, 5}}, false},
 	}
 	for _, test := range tests {
-		got := GameContinues(test.boardHeight, test.boardWidth, test.snake)
+		got := gameContinues(test.boardHeight, test.boardWidth, test.snake)
 		if got != test.want {
-			t.Errorf("GameContinues(%v, %v, %v) = %v", test.boardHeight, test.boardWidth, test.snake, got)
+			t.Errorf("gameContinues(%v, %v, %v) = %v", test.boardHeight, test.boardWidth, test.snake, got)
 		}
 	}
 }
@@ -97,9 +97,9 @@ func TestInputReturnsAppropriateDirection(t *testing.T) {
 		{'l', Pt{-1, 0}, Pt{-1, 0}},
 	}
 	for _, test := range tests {
-		got := GetDirectionFromInput(test.input, test.curDir)
+		got := getDirectionFromInput(test.input, test.curDir)
 		if got != test.want {
-			t.Errorf("GetDirectionFromInput('%c', %v) = %v, wanted %v", test.input, test.curDir, got, test.want)
+			t.Errorf("getDirectionFromInput('%c', %v) = %v, wanted %v", test.input, test.curDir, got, test.want)
 		}
 	}
 }

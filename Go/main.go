@@ -1,36 +1,36 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 
 	"github.com/lag13/snake/Go/render/displayPlatform"
 	"github.com/lag13/snake/Go/snakegame"
 )
 
-// TODO: Be able to pause and quit the game
-
 // TODO: Make an AI
 
-// TODO: Be able to pass in command line flags to change the size of the board
-
 // TODO: Maybe draw the board in the middle of the terminal instead of the
-// upper left hand corner.
+// upper left hand corner. Perhaps make this configurable. Maybe also make the
+// game itself bounce around the screen. That could be fun.
 
 // TODO: Make it possible to change the sleep duration to speedup/slowdown the
 // game
 
 func main() {
-	height := 15
-	width := 15
-	// whichDisplayPlatform := "ncurses"
-	// whichDisplayPlatform := "ncurses2"
-	whichDisplayPlatform := "termbox"
-	renderer, cleanup, inputStream, err := displayPlatform.InitDisplayPlatform(whichDisplayPlatform)
+	height := flag.Int("h", 20, "height of game")
+	width := flag.Int("w", 20, "width of game")
+	whichDisplayPlatform := flag.String("d", "termbox", "the terminal package used to display the game")
+	// sleep := flag.Int("s", 100, "how long the game sleeps in between flags (ms)")
+	flag.Parse()
+	renderer, cleanup, inputStream, err := displayPlatform.InitDisplayPlatform(*whichDisplayPlatform)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	defer cleanup()
-	gameState := snakegame.InitSnakeGame(height, width, inputStream)
-	snakegame.GameLoop(renderer, gameState)
+	gameState := snakegame.InitSnakeGame(*height, *width, inputStream)
+	score := snakegame.GameLoop(renderer, gameState)
+	cleanup()
+	fmt.Printf("Score was %d\n", score)
 }
