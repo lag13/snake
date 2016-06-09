@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/lag13/snake/Go/render/displayPlatform"
-	"github.com/lag13/snake/Go/snakegame"
+	"github.com/lag13/snake/Go/controller"
+	"github.com/lag13/snake/Go/model"
+	"github.com/lag13/snake/Go/view"
 )
 
 // TODO: Make an AI
@@ -15,22 +16,19 @@ import (
 // upper left hand corner. Perhaps make this configurable. Maybe also make the
 // game itself bounce around the screen. That could be fun.
 
-// TODO: Make it possible to change the sleep duration to speedup/slowdown the
-// game
-
 func main() {
 	height := flag.Int("h", 20, "height of game")
 	width := flag.Int("w", 20, "width of game")
-	whichDisplayPlatform := flag.String("d", "termbox", "the terminal package used to display the game")
-	// sleep := flag.Int("s", 100, "how long the game sleeps in between flags (ms)")
+	sleep := flag.Int("s", 100, "how long the game sleeps in between flags (ms)")
 	flag.Parse()
-	renderer, cleanup, inputStream, err := displayPlatform.InitDisplayPlatform(*whichDisplayPlatform)
+	renderer, cleanupDisplayPlatform, inputStream, err := view.New()
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	gameState := snakegame.InitSnakeGame(*height, *width, inputStream)
-	score := snakegame.GameLoop(renderer, gameState)
-	cleanup()
+	inputHandler := controller.New(inputStream)
+	gameState := model.InitSnakeGame(*height, *width, *sleep, inputHandler)
+	score := model.GameLoop(renderer, gameState)
+	cleanupDisplayPlatform()
 	fmt.Printf("Score was %d\n", score)
 }

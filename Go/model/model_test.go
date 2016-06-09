@@ -1,10 +1,12 @@
-package snakegame
+package model
 
 import (
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/lag13/snake/Go/controller"
 )
 
 func TestGameContinues(t *testing.T) {
@@ -82,19 +84,19 @@ func generateSnakeCoveringMostOfBoard(height int, width int) []Pt {
 
 func TestInputReturnsAppropriateDirection(t *testing.T) {
 	tests := []struct {
-		input  rune
+		input  int
 		curDir Pt
 		want   Pt
 	}{
-		{'h', Pt{0, 0}, Pt{-1, 0}},
-		{'j', Pt{0, 0}, Pt{0, 1}},
-		{'k', Pt{0, 0}, Pt{0, -1}},
-		{'l', Pt{0, 0}, Pt{1, 0}},
-		{'q', Pt{1, 0}, Pt{1, 0}},
-		{'h', Pt{1, 0}, Pt{1, 0}},
-		{'j', Pt{0, -1}, Pt{0, -1}},
-		{'k', Pt{0, 1}, Pt{0, 1}},
-		{'l', Pt{-1, 0}, Pt{-1, 0}},
+		{controller.Left, Pt{0, 0}, Pt{-1, 0}},
+		{controller.Down, Pt{0, 0}, Pt{0, 1}},
+		{controller.Up, Pt{0, 0}, Pt{0, -1}},
+		{controller.Right, Pt{0, 0}, Pt{1, 0}},
+		{controller.Quit, Pt{1, 0}, Pt{1, 0}},
+		{controller.Left, Pt{1, 0}, Pt{1, 0}},
+		{controller.Down, Pt{0, -1}, Pt{0, -1}},
+		{controller.Up, Pt{0, 1}, Pt{0, 1}},
+		{controller.Right, Pt{-1, 0}, Pt{-1, 0}},
 	}
 	for _, test := range tests {
 		got := getDirectionFromInput(test.input, test.curDir)
@@ -106,20 +108,15 @@ func TestInputReturnsAppropriateDirection(t *testing.T) {
 
 type mockGameInput struct {
 	inputIndex int
-	inputs     []rune
+	inputs     []int
 }
 
-func (mgi *mockGameInput) GetInput() rune {
+func (mgi *mockGameInput) GetInput() int {
 	if mgi.inputIndex == len(mgi.inputs) {
 		return mgi.inputs[len(mgi.inputs)-1]
 	}
 	mgi.inputIndex++
 	return mgi.inputs[mgi.inputIndex-1]
-}
-
-type mockSleeper struct{}
-
-func (ms *mockSleeper) Sleep() {
 }
 
 type mockRenderer struct {
@@ -153,7 +150,6 @@ func TestGameBehavesAsExpectedGivenInput(t *testing.T) {
 		height = 4
 		width  = 4
 	)
-	ms := &mockSleeper{}
 	tests := []struct {
 		renderer        *mockRenderer
 		gameInput       *mockGameInput
@@ -162,7 +158,7 @@ func TestGameBehavesAsExpectedGivenInput(t *testing.T) {
 	}{
 		{
 			&mockRenderer{},
-			&mockGameInput{0, []rune{'j', 'l', 'l', 'k', 'k', 'h', 'j', 'j', 'k', 'l', 'k', 'j', 'k', 'h'}},
+			&mockGameInput{0, []int{controller.Down, controller.Right, controller.Right, controller.Up, controller.Up, controller.Left, controller.Down, controller.Down, controller.Up, controller.Right, controller.Up, controller.Down, controller.Up, controller.Left}},
 			&mockFoodGenerator{0, []Pt{{1, 2}, {2, 2}, {2, 3}, {3, 3}, {1, 0}}},
 			[][]Pt{ // Test snake runs around for a while then dies running into a wall
 				[]Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}},
@@ -186,7 +182,7 @@ func TestGameBehavesAsExpectedGivenInput(t *testing.T) {
 		},
 		{ // Test snake dies by running into itself
 			&mockRenderer{},
-			&mockGameInput{0, []rune{'j', 'l', 'k', 'h'}},
+			&mockGameInput{0, []int{controller.Down, controller.Right, controller.Up, controller.Left}},
 			&mockFoodGenerator{0, []Pt{{1, 2}}},
 			[][]Pt{
 				[]Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}},
@@ -197,11 +193,10 @@ func TestGameBehavesAsExpectedGivenInput(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		gameState := InitSnakeGame(height, width, nil)
+		gameState := InitSnakeGame(height, width, 0, nil)
 		gameState.foodGenerator = test.foodGenerator
 		gameState.Food = test.foodGenerator.generateFood(gameState.Height, gameState.Width, gameState.Snake)
 		gameState.inputGetter = test.gameInput
-		gameState.Sleeper = ms
 		GameLoop(test.renderer, gameState)
 		// TODO: Go preferrs tests to say got this want this instead of the
 		// reverse like I'm doing here. Fix this.

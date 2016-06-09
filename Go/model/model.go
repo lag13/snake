@@ -1,4 +1,4 @@
-package snakegame
+package model
 
 // TODO: Add documentation
 
@@ -10,6 +10,8 @@ package snakegame
 import (
 	"math/rand"
 	"time"
+
+	"github.com/lag13/snake/Go/controller"
 )
 
 // TODO: I'm not sure if I like this big struct of stuff. Can we break it up?
@@ -22,42 +24,17 @@ type GameState struct {
 	foodGenerator foodGenerator
 	Food          Pt
 	inputGetter   InputGetter
-	Sleeper       Sleeper
+	sleepDuration time.Duration
 	Score         int
 	Paused        bool
 }
 
 type InputGetter interface {
-	GetInput() rune
-}
-
-type defaultInputGetter struct {
-	in <-chan rune
-}
-
-// TODO: Make this only accept input that is "valid" for example if they enter
-// two 'h's in a row, the second 'h' is definitely an invalid move so just
-// discard it.
-// TODO: Should this be called something like humanInputGetter?
-func (g *defaultInputGetter) GetInput() rune {
-	select {
-	case input := <-g.in:
-		return input
-	default:
-		return '\x00'
-	}
-}
-
-func buildDefaultInputGetter(inputStream <-chan rune) *defaultInputGetter {
-	return &defaultInputGetter{inputStream}
+	GetInput() int
 }
 
 type Renderer interface {
 	Render(gs GameState)
-}
-
-type Sleeper interface {
-	Sleep()
 }
 
 type foodGenerator interface {
@@ -79,18 +56,6 @@ func (fg *defaultFoodGenerator) generateFood(height int, width int, snake []Pt) 
 		return Pt{-1, -1}
 	}
 	return possiblePositions[fg.rng.Intn(len(possiblePositions))]
-}
-
-type defaultSleeper struct {
-	duration time.Duration
-}
-
-func (s defaultSleeper) Sleep() {
-	time.Sleep(s.duration)
-}
-
-func buildDefaultSleeper() Sleeper {
-	return defaultSleeper{100 * time.Millisecond}
 }
 
 type Pt struct {
@@ -163,7 +128,7 @@ func updateGameState(gs GameState) (newGameState GameState) {
 	// object but the only two things that change are the snake and food
 	// postitions. Fix this, make it nicer. I feel doing this could also
 	// relate to how I don't like how big the GameState struct is.
-	return GameState{gs.Height, gs.Width, newSnake, gs.curDirection, gs.foodGenerator, newFood, gs.inputGetter, gs.Sleeper, gs.Score, gs.Paused}
+	return GameState{gs.Height, gs.Width, newSnake, gs.curDirection, gs.foodGenerator, newFood, gs.inputGetter, gs.sleepDuration, gs.Score, gs.Paused}
 }
 
 func copySnake(snake []Pt) []Pt {
@@ -188,14 +153,14 @@ var (
 	right = Pt{1, 0}
 )
 
-var inputToDirectionMap = map[rune]Pt{
-	'h': left,
-	'j': down,
-	'k': up,
-	'l': right,
+var inputToDirectionMap = map[int]Pt{
+	controller.Left:  left,
+	controller.Down:  down,
+	controller.Up:    up,
+	controller.Right: right,
 }
 
-func getDirectionFromInput(input rune, currentDirection Pt) Pt {
+func getDirectionFromInput(input int, currentDirection Pt) Pt {
 	dir, ok := inputToDirectionMap[input]
 	if !ok {
 		return currentDirection
@@ -210,7 +175,7 @@ func pointsAreOrthogonal(p1 Pt, p2 Pt) bool {
 	return p1.X*p2.X+p1.Y*p2.Y == 0
 }
 
-func InitSnakeGame(height int, width int, inputStream <-chan rune) GameState {
+func InitSnakeGame(height int, width int, sleep int, inputGetter InputGetter) GameState {
 	snake := []Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}}
 	initialDirection := Pt{0, 1}
 	// TODO: Instead of doing all this "buildDefault" stuff could we just make
@@ -220,28 +185,30 @@ func InitSnakeGame(height int, width int, inputStream <-chan rune) GameState {
 	// https://peter.bourgon.org/go-best-practices-2016/#program-design
 	foodGenerator := buildDefaultFoodGenerator()
 	food := foodGenerator.generateFood(height, width, snake)
-	inputGetter := buildDefaultInputGetter(inputStream)
-	sleeper := buildDefaultSleeper()
-	return GameState{height, width, snake, initialDirection, foodGenerator, food, inputGetter, sleeper, 0, false}
-}
-
-func userQuit(input rune) bool {
-	return input == 'q'
-}
-
-func userPaused(input rune) bool {
-	return input == 'p'
+	return GameState{height, width, snake, initialDirection, foodGenerator, food, inputGetter, time.Duration(sleep) * time.Millisecond, 0, false}
 }
 
 func GameLoop(r Renderer, gs GameState) int {
+	// I think this structure to the game loop is best:
+	// 1. Render (the initial game state has to be drawn after all)
+	// 2. Sleep (gives the player some time to see the game and respond to it in its current state)
+	// 3. Get input
+	// 4. Update
+	// If you updated first then the inital game state would never be rendered
+	// which feels weird to me. If there was no sleep between the render and
+	// the updating then people would have less time to respond to what they
+	// see on screen before it changes.
 	for gameContinues(gs.Height, gs.Width, gs.Snake) {
 		r.Render(gs)
-		gs.Sleeper.Sleep()
+		time.Sleep(gs.sleepDuration)
+		// TODO: When getting the input maybe keep trying to get input until we
+		// get something "valid" for example if they enter two 'h's in a row,
+		// the second 'h' is definitely an invalid move so just discard it.
 		input := gs.inputGetter.GetInput()
-		if userQuit(input) {
+		if input == controller.Quit {
 			break
 		}
-		if userPaused(input) {
+		if input == controller.Pause {
 			gs.Paused = !gs.Paused
 		}
 		if !gs.Paused {

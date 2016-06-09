@@ -1,9 +1,10 @@
-package render
+package view
 
 import (
 	"fmt"
 
-	"github.com/lag13/snake/Go/snakegame"
+	"github.com/lag13/snake/Go/model"
+	"github.com/lag13/snake/Go/view/termbox"
 )
 
 type clearScreen func()
@@ -18,6 +19,14 @@ type simpleRenderer struct {
 	refresh refreshScreen
 }
 
+type cleanupDisplayPlatform func()
+
+func New() (renderer model.Renderer, cleanup cleanupDisplayPlatform, inputStream chan rune, err error) {
+	inputStream = make(chan rune)
+	clear, dc, refresh, cleanup, err := termbox.Init(inputStream)
+	return simpleRenderer{clear, dc, refresh}, cleanup, inputStream, err
+}
+
 func spaceOutX(x int) int {
 	return 2 * x
 }
@@ -26,7 +35,7 @@ func (r simpleRenderer) drawGameCell(x int, y int, ch rune) {
 	r.dc(spaceOutX(x)+spaceOutX(1), y+1, ch)
 }
 
-func (r simpleRenderer) Render(gs snakegame.GameState) {
+func (r simpleRenderer) Render(gs model.GameState) {
 	r.clear()
 	r.drawBorder(gs.Height, gs.Width)
 	r.drawSnake(gs.Snake)
@@ -91,13 +100,13 @@ func (r simpleRenderer) drawCorners(height int, width int) {
 	r.dc(w, 0, '+')
 }
 
-func (r simpleRenderer) drawSnake(snake []snakegame.Pt) {
+func (r simpleRenderer) drawSnake(snake []model.Pt) {
 	for _, pt := range snake {
 		r.drawGameCell(pt.X, pt.Y, '#')
 	}
 }
 
-func (r simpleRenderer) drawFood(food snakegame.Pt) {
+func (r simpleRenderer) drawFood(food model.Pt) {
 	r.drawGameCell(food.X, food.Y, '@')
 }
 
