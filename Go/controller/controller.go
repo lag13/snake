@@ -1,6 +1,6 @@
 // Package control takes human input and maps it into an internal
 // representation which will be used by the model to appropriately update the
-// game state.
+// game state. This allows us to easily change the controls for the game.
 package controller
 
 const (
@@ -18,6 +18,10 @@ var internalRepresentation = map[rune]int{
 	'j': Down,
 	'k': Up,
 	'l': Right,
+	'a': Left,
+	's': Down,
+	'w': Up,
+	'd': Right,
 	'p': Pause,
 	'q': Quit,
 }
