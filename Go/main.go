@@ -7,6 +7,7 @@ import (
 
 	"github.com/lag13/snake/Go/controller"
 	"github.com/lag13/snake/Go/model"
+	"github.com/lag13/snake/Go/terminal"
 	"github.com/lag13/snake/Go/view"
 )
 
@@ -21,14 +22,16 @@ func main() {
 	width := flag.Int("w", 20, "width of game")
 	sleep := flag.Int("s", 100, "how long the game sleeps in between flags (ms)")
 	flag.Parse()
-	renderer, cleanupDisplayPlatform, inputStream, err := view.New()
+	inputStream := make(chan rune)
+	clearScreen, drawCell, refreshScreen, cleanup, err := terminal.Init(inputStream)
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	renderer := view.New(clearScreen, drawCell, refreshScreen)
 	inputHandler := controller.New(inputStream)
 	gameState := model.InitSnakeGame(*height, *width, *sleep, inputHandler)
 	score := model.GameLoop(renderer, gameState)
-	cleanupDisplayPlatform()
+	cleanup()
 	fmt.Printf("Score was %d\n", score)
 }

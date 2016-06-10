@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/lag13/snake/Go/model"
-	"github.com/lag13/snake/Go/view/termbox"
 )
 
 type clearScreen func()
@@ -21,10 +20,8 @@ type simpleRenderer struct {
 
 type cleanupDisplayPlatform func()
 
-func New() (renderer model.Renderer, cleanup cleanupDisplayPlatform, inputStream chan rune, err error) {
-	inputStream = make(chan rune)
-	clear, dc, refresh, cleanup, err := termbox.Init(inputStream)
-	return simpleRenderer{clear, dc, refresh}, cleanup, inputStream, err
+func New(c clearScreen, d drawCell, r refreshScreen) model.Renderer {
+	return simpleRenderer{c, d, r}
 }
 
 func spaceOutX(x int) int {
@@ -50,10 +47,6 @@ func (r simpleRenderer) Render(gs model.GameState) {
 func (r simpleRenderer) drawPause(y int, x int) {
 	s := "[Paused]"
 	r.drawString(y, x-len(s)/2, s)
-}
-
-func NewSimpleRenderer(clear clearScreen, dc drawCell, refresh refreshScreen) simpleRenderer {
-	return simpleRenderer{clear, dc, refresh}
 }
 
 func (r simpleRenderer) drawBorder(height int, width int) {

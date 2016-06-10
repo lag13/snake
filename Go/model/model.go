@@ -189,15 +189,15 @@ func InitSnakeGame(height int, width int, sleep int, inputGetter InputGetter) Ga
 }
 
 func GameLoop(r Renderer, gs GameState) int {
-	// I think this structure to the game loop is best:
+	// I think the below structure to the game loop is best:
 	// 1. Render (the initial game state has to be drawn after all)
 	// 2. Sleep (gives the player some time to see the game and respond to it in its current state)
 	// 3. Get input
 	// 4. Update
 	// If you updated first then the inital game state would never be rendered
 	// which feels weird to me. If there was no sleep between the render and
-	// the updating then people would have less time to respond to what they
-	// see on screen before it changes.
+	// the update then people would have less time to respond to what they see
+	// on screen before it changes.
 	for gameContinues(gs.Height, gs.Width, gs.Snake) {
 		r.Render(gs)
 		time.Sleep(gs.sleepDuration)
