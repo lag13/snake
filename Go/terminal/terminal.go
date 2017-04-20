@@ -14,17 +14,14 @@ func renderGame() {
 	termbox.Flush()
 }
 
-func Init(out chan<- rune) (func(), func(int, int, rune), func(), func(), error) {
-	if err := termbox.Init(); err != nil {
-		return clear, setCell, renderGame, termbox.Close, err
-	}
-	go pollForInput(out)
-	return clear, setCell, renderGame, termbox.Close, nil
+func getChar() rune {
+	event := termbox.PollEvent()
+	return event.Ch
 }
 
-func pollForInput(out chan<- rune) {
-	for {
-		event := termbox.PollEvent()
-		out <- event.Ch
+func Init() (func(), func(int, int, rune), func(), func() rune, func(), error) {
+	if err := termbox.Init(); err != nil {
+		return clear, setCell, renderGame, getChar, termbox.Close, err
 	}
+	return clear, setCell, renderGame, getChar, termbox.Close, nil
 }

@@ -6,11 +6,19 @@ import (
 	"github.com/lag13/snake/Go/model"
 )
 
+// TODO: Maybe draw the board in the middle of the terminal instead of the
+// upper left hand corner. Perhaps make this configurable. Maybe also make the
+// game itself bounce around the screen. That could be fun.
+
 type clearScreen func()
 
 type drawCell func(x int, y int, ch rune)
 
 type refreshScreen func()
+
+type Renderer interface {
+	Render(gs model.GameState)
+}
 
 type simpleRenderer struct {
 	clear   clearScreen
@@ -20,7 +28,7 @@ type simpleRenderer struct {
 
 type cleanupDisplayPlatform func()
 
-func New(c clearScreen, d drawCell, r refreshScreen) model.Renderer {
+func New(c clearScreen, d drawCell, r refreshScreen) Renderer {
 	return simpleRenderer{c, d, r}
 }
 

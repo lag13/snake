@@ -26,9 +26,11 @@ func TestGameContinues(t *testing.T) {
 		{10, 10, []Pt{{0, 5}, {0, 5}}, false},
 	}
 	for _, test := range tests {
-		got := gameContinues(test.boardHeight, test.boardWidth, test.snake)
+		gs := New(test.boardHeight, test.boardWidth)
+		gs.Snake = test.snake
+		got := gs.GameContinues()
 		if got != test.want {
-			t.Errorf("gameContinues(%v, %v, %v) = %v", test.boardHeight, test.boardWidth, test.snake, got)
+			t.Errorf("GameContinues() with height = %d, width = %d, and snake = %v was %v", test.boardHeight, test.boardWidth, test.snake, got)
 		}
 	}
 }
@@ -51,7 +53,7 @@ func TestGenerateFoodDoesNotHitSnake(t *testing.T) {
 		{2, 2, []Pt{{0, 0}, {0, 1}, {1, 0}}, Pt{1, 1}},
 	}
 	for _, test := range tests {
-		got := foodGenerator.generateFood(test.height, test.width, test.snake)
+		got := foodGenerator.GenerateFood(test.height, test.width, test.snake)
 		if got != test.want {
 			t.Errorf("generateFood(%v, %v, %v) = %v, wanted %v", test.height, test.width, test.snake, got, test.want)
 		}
@@ -65,7 +67,7 @@ func TestGenerateFoodDoesNotHitSnake(t *testing.T) {
 	rng := rand.New(rand.NewSource(seed))
 	foodGenerator = &defaultFoodGenerator{rng}
 	for i := 0; i < 100; i++ {
-		food := foodGenerator.generateFood(height, width, snake)
+		food := foodGenerator.GenerateFood(height, width, snake)
 		if positionExists(food, snake) {
 			t.Errorf("generated a food position %v that hits the snake %v, seed for rng was %v and this was the %d random number generated", food, snake, seed, i)
 		}
@@ -106,108 +108,58 @@ func TestInputReturnsAppropriateDirection(t *testing.T) {
 	}
 }
 
-type mockGameInput struct {
-	inputIndex int
-	inputs     []int
-}
-
-func (mgi *mockGameInput) GetInput() int {
-	if mgi.inputIndex == len(mgi.inputs) {
-		return mgi.inputs[len(mgi.inputs)-1]
-	}
-	mgi.inputIndex++
-	return mgi.inputs[mgi.inputIndex-1]
-}
-
-type mockRenderer struct {
-	gameStates []GameState
-}
-
-func (mr *mockRenderer) Render(gs GameState) {
-	mr.gameStates = append(mr.gameStates, gs)
-}
-
-type mockFoodGenerator struct {
-	foodIndex     int
-	foodPositions []Pt
-}
-
-func (mfg *mockFoodGenerator) generateFood(height int, width int, snake []Pt) Pt {
-	if len(mfg.foodPositions) == 0 {
-		return Pt{-1, -1}
-	}
-	if mfg.foodIndex == len(mfg.foodPositions) {
-		return Pt{-1, -1}
-	}
-	mfg.foodIndex++
-	return mfg.foodPositions[mfg.foodIndex-1]
-}
-
-// TODO: Does this test in some way make other tests obsolete because I'm
-// testing this game from start to finish?
-func TestGameBehavesAsExpectedGivenInput(t *testing.T) {
+func TestUpdateGameState(t *testing.T) {
 	const (
-		height = 4
-		width  = 4
+		height = 10
+		width
 	)
 	tests := []struct {
-		renderer        *mockRenderer
-		gameInput       *mockGameInput
-		foodGenerator   *mockFoodGenerator
-		wantSnakeStates [][]Pt
+		input         int
+		direction     Pt
+		foodPos       Pt
+		snake         []Pt
+		score         int
+		paused        bool
+		wantDirection Pt
+		wantSnake     []Pt
+		wantScore     int
+		wantPaused    bool
 	}{
-		{
-			&mockRenderer{},
-			&mockGameInput{0, []int{controller.Down, controller.Right, controller.Right, controller.Up, controller.Up, controller.Left, controller.Down, controller.Down, controller.Up, controller.Right, controller.Up, controller.Down, controller.Up, controller.Left}},
-			&mockFoodGenerator{0, []Pt{{1, 2}, {2, 2}, {2, 3}, {3, 3}, {1, 0}}},
-			[][]Pt{ // Test snake runs around for a while then dies running into a wall
-				[]Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]Pt{{1, 2}, {1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]Pt{{2, 2}, {1, 2}, {1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]Pt{{3, 2}, {2, 2}, {1, 2}, {1, 1}, {1, 0}, {0, 0}},
-				[]Pt{{3, 1}, {3, 2}, {2, 2}, {1, 2}, {1, 1}, {1, 0}},
-				[]Pt{{3, 0}, {3, 1}, {3, 2}, {2, 2}, {1, 2}, {1, 1}},
-				[]Pt{{2, 0}, {3, 0}, {3, 1}, {3, 2}, {2, 2}, {1, 2}},
-				[]Pt{{2, 1}, {2, 0}, {3, 0}, {3, 1}, {3, 2}, {2, 2}},
-				[]Pt{{2, 2}, {2, 1}, {2, 0}, {3, 0}, {3, 1}, {3, 2}},
-				[]Pt{{2, 3}, {2, 2}, {2, 1}, {2, 0}, {3, 0}, {3, 1}, {3, 2}},
-				[]Pt{{3, 3}, {2, 3}, {2, 2}, {2, 1}, {2, 0}, {3, 0}, {3, 1}, {3, 2}},
-				[]Pt{{3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}, {2, 0}, {3, 0}, {3, 1}},
-				[]Pt{{3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}, {2, 0}, {3, 0}},
-				[]Pt{{3, 0}, {3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}, {2, 0}},
-				[]Pt{{2, 0}, {3, 0}, {3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}},
-				[]Pt{{1, 0}, {2, 0}, {3, 0}, {3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}},
-				[]Pt{{0, 0}, {1, 0}, {2, 0}, {3, 0}, {3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}},
-			},
-		},
-		{ // Test snake dies by running into itself
-			&mockRenderer{},
-			&mockGameInput{0, []int{controller.Down, controller.Right, controller.Up, controller.Left}},
-			&mockFoodGenerator{0, []Pt{{1, 2}}},
-			[][]Pt{
-				[]Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]Pt{{1, 2}, {1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]Pt{{2, 2}, {1, 2}, {1, 1}, {1, 0}, {0, 0}},
-				[]Pt{{2, 1}, {2, 2}, {1, 2}, {1, 1}, {1, 0}},
-			},
-		},
+		// Trying to move in a direction opposite the current direction keeps the snake moving in the current direction.
+		{controller.Up, down, Pt{3, 2}, []Pt{{4, 4}, {3, 4}, {2, 4}, {1, 4}}, 0, false, down, []Pt{{4, 5}, {4, 4}, {3, 4}, {2, 4}}, 0, false},
+		// Moving orthogonal to direction of travel works.
+		{controller.Left, down, Pt{3, 2}, []Pt{{4, 4}, {3, 4}, {2, 4}, {1, 4}}, 0, false, left, []Pt{{3, 4}, {4, 4}, {3, 4}, {2, 4}}, 0, false},
+		// Eating the food grows the snake and increases the score.
+		{controller.Right, down, Pt{5, 4}, []Pt{{4, 4}, {3, 4}, {2, 4}, {1, 4}}, 0, false, right, []Pt{{5, 4}, {4, 4}, {3, 4}, {2, 4}, {1, 4}}, 1, false},
+		// If the game is paused and they try to move then the game state does not change.
+		{controller.Right, down, Pt{5, 4}, []Pt{{4, 4}, {3, 4}, {2, 4}, {1, 4}}, 0, true, down, []Pt{{4, 4}, {3, 4}, {2, 4}, {1, 4}}, 0, true},
+		// If the game is paused and they unpause it then the game changes.
+		{controller.Pause, down, Pt{5, 4}, []Pt{{4, 4}, {3, 4}, {2, 4}, {1, 4}}, 0, true, down, []Pt{{4, 5}, {4, 4}, {3, 4}, {2, 4}}, 0, false},
+		// If the game is not paused and they pause it then the game state does not change.
+		{controller.Pause, down, Pt{5, 4}, []Pt{{4, 4}, {3, 4}, {2, 4}, {1, 4}}, 0, false, down, []Pt{{4, 4}, {3, 4}, {2, 4}, {1, 4}}, 0, true},
 	}
-	for _, test := range tests {
-		gameState := InitSnakeGame(height, width, 0, nil)
-		gameState.foodGenerator = test.foodGenerator
-		gameState.Food = test.foodGenerator.generateFood(gameState.Height, gameState.Width, gameState.Snake)
-		gameState.inputGetter = test.gameInput
-		GameLoop(test.renderer, gameState)
-		// TODO: Go preferrs tests to say got this want this instead of the
-		// reverse like I'm doing here. Fix this.
-		if len(test.wantSnakeStates) != len(test.renderer.gameStates) {
-			t.Errorf("want %d iterations of the game loop, got %d", len(test.wantSnakeStates), len(test.renderer.gameStates))
-		} else {
-			for i, snakeState := range test.wantSnakeStates {
-				if !reflect.DeepEqual(snakeState, test.renderer.gameStates[i].Snake) {
-					t.Errorf("after %d game loop iterations want snake to be %v, got %v", i, snakeState, test.renderer.gameStates[i].Snake)
-				}
-			}
+	for i, test := range tests {
+		errorMsg := func(str string, args ...interface{}) {
+			t.Errorf(str+" Running test %d", append(args, i)...)
+		}
+		gs := New(height, width)
+		gs.CurDirection = test.direction
+		gs.Food = test.foodPos
+		gs.Snake = test.snake
+		gs.Score = test.score
+		gs.Paused = test.paused
+		gs.UpdateGameState(test.input)
+		if gs.CurDirection != test.wantDirection {
+			errorMsg("got direction %v, wanted %v.", gs.CurDirection, test.wantDirection)
+		}
+		if !reflect.DeepEqual(gs.Snake, test.wantSnake) {
+			errorMsg("got snake %v, wanted %v.", gs.Snake, test.wantSnake)
+		}
+		if gs.Score != test.wantScore {
+			errorMsg("got score %v, wanted %v.", gs.Score, test.wantScore)
+		}
+		if gs.Paused != test.wantPaused {
+			errorMsg("got paused %v.", gs.Paused)
 		}
 	}
 }

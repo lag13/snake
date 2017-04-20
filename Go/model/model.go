@@ -1,12 +1,5 @@
 package model
 
-// TODO: Add documentation
-
-// TODO: Should I make an abstract snake type and food type? And give
-// functions to help draw them? That way the renderer does not have to worry
-// about their internal implementation (which they do now, they know that they
-// are Pt's)
-
 import (
 	"math/rand"
 	"time"
@@ -14,31 +7,19 @@ import (
 	"github.com/lag13/snake/Go/controller"
 )
 
-// TODO: I'm not sure if I like this big struct of stuff. Can we break it up?
-// Or change how we do things so this is not needed?
 type GameState struct {
-	Height        int
-	Width         int
-	Snake         []Pt
-	curDirection  Pt
-	foodGenerator foodGenerator
-	Food          Pt
-	inputGetter   InputGetter
-	sleepDuration time.Duration
-	Score         int
-	Paused        bool
+	Height       int
+	Width        int
+	Snake        []Pt
+	CurDirection Pt
+	FoodGen      FoodGenerator
+	Food         Pt
+	Score        int
+	Paused       bool
 }
 
-type InputGetter interface {
-	GetInput() int
-}
-
-type Renderer interface {
-	Render(gs GameState)
-}
-
-type foodGenerator interface {
-	generateFood(height int, width int, snake []Pt) Pt
+type FoodGenerator interface {
+	GenerateFood(height int, width int, snake []Pt) Pt
 }
 
 type defaultFoodGenerator struct {
@@ -50,7 +31,7 @@ func buildDefaultFoodGenerator() *defaultFoodGenerator {
 	return &defaultFoodGenerator{rng}
 }
 
-func (fg *defaultFoodGenerator) generateFood(height int, width int, snake []Pt) Pt {
+func (fg *defaultFoodGenerator) GenerateFood(height int, width int, snake []Pt) Pt {
 	possiblePositions := getPossiblePositions(height, width, snake)
 	if len(possiblePositions) == 0 {
 		return Pt{-1, -1}
@@ -63,11 +44,11 @@ type Pt struct {
 	Y int
 }
 
-func gameContinues(height int, width int, snake []Pt) bool {
-	if snakeOutOfBounds(height, width, snake[0]) {
+func (gs GameState) GameContinues() bool {
+	if snakeOutOfBounds(gs.Height, gs.Width, gs.Snake[0]) {
 		return false
 	}
-	if snakeHitBody(snake) {
+	if snakeHitBody(gs.Snake) {
 		return false
 	}
 	return true
@@ -114,21 +95,25 @@ func positionExists(ptToCheck Pt, pts []Pt) bool {
 	return false
 }
 
-func updateGameState(gs GameState) (newGameState GameState) {
+func (gs *GameState) UpdateGameState(input int) {
+	if input == controller.Pause {
+		gs.Paused = !gs.Paused
+	}
+	if gs.Paused {
+		return
+	}
+	gs.CurDirection = getDirectionFromInput(input, gs.CurDirection)
 	oldTail := gs.Snake[len(gs.Snake)-1]
 	newSnake := copySnake(gs.Snake)
-	newSnake = moveSnake(newSnake, gs.curDirection)
+	newSnake = moveSnake(newSnake, gs.CurDirection)
 	newFood := gs.Food
 	if newSnake[0] == newFood {
 		gs.Score++
-		newFood = gs.foodGenerator.generateFood(gs.Height, gs.Width, newSnake)
+		newFood = gs.FoodGen.GenerateFood(gs.Height, gs.Width, newSnake)
 		newSnake = append(newSnake, oldTail)
 	}
-	// TODO: I don't think that I like how I'm returning a new game state
-	// object but the only two things that change are the snake and food
-	// postitions. Fix this, make it nicer. I feel doing this could also
-	// relate to how I don't like how big the GameState struct is.
-	return GameState{gs.Height, gs.Width, newSnake, gs.curDirection, gs.foodGenerator, newFood, gs.inputGetter, gs.sleepDuration, gs.Score, gs.Paused}
+	gs.Food = newFood
+	gs.Snake = newSnake
 }
 
 func copySnake(snake []Pt) []Pt {
@@ -175,46 +160,10 @@ func pointsAreOrthogonal(p1 Pt, p2 Pt) bool {
 	return p1.X*p2.X+p1.Y*p2.Y == 0
 }
 
-func InitSnakeGame(height int, width int, sleep int, inputGetter InputGetter) GameState {
+func New(height int, width int) *GameState {
 	snake := []Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}}
 	initialDirection := Pt{0, 1}
-	// TODO: Instead of doing all this "buildDefault" stuff could we just make
-	// a new struct type containing these "default" things then define the 0
-	// value of those struct members to be the result of these functions? This
-	// might be able to help in this issue and others:
-	// https://peter.bourgon.org/go-best-practices-2016/#program-design
 	foodGenerator := buildDefaultFoodGenerator()
-	food := foodGenerator.generateFood(height, width, snake)
-	return GameState{height, width, snake, initialDirection, foodGenerator, food, inputGetter, time.Duration(sleep) * time.Millisecond, 0, false}
-}
-
-func GameLoop(r Renderer, gs GameState) int {
-	// I think the below structure to the game loop is best:
-	// 1. Render (the initial game state has to be drawn after all)
-	// 2. Sleep (gives the player some time to see the game and respond to it in its current state)
-	// 3. Get input
-	// 4. Update
-	// If you updated first then the inital game state would never be rendered
-	// which feels weird to me. If there was no sleep between the render and
-	// the update then people would have less time to respond to what they see
-	// on screen before it changes.
-	for gameContinues(gs.Height, gs.Width, gs.Snake) {
-		r.Render(gs)
-		time.Sleep(gs.sleepDuration)
-		// TODO: When getting the input maybe keep trying to get input until we
-		// get something "valid" for example if they enter two 'h's in a row,
-		// the second 'h' is definitely an invalid move so just discard it.
-		input := gs.inputGetter.GetInput()
-		if input == controller.Quit {
-			break
-		}
-		if input == controller.Pause {
-			gs.Paused = !gs.Paused
-		}
-		if !gs.Paused {
-			gs.curDirection = getDirectionFromInput(input, gs.curDirection)
-			gs = updateGameState(gs)
-		}
-	}
-	return gs.Score
+	food := foodGenerator.GenerateFood(height, width, snake)
+	return &GameState{height, width, snake, initialDirection, foodGenerator, food, 0, false}
 }

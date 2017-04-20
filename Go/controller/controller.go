@@ -1,7 +1,11 @@
-// Package control takes human input and maps it into an internal
+// Package controller takes human input and maps it into an internal
 // representation which will be used by the model to appropriately update the
 // game state. This allows us to easily change the controls for the game.
 package controller
+
+type InputGetter interface {
+	GetInput() int
+}
 
 const (
 	None = iota
@@ -26,15 +30,15 @@ var internalRepresentation = map[rune]int{
 	'q': Quit,
 }
 
-type handler struct {
+type humanInputGetter struct {
 	inputStream <-chan rune
 }
 
-func New(inputStream <-chan rune) *handler {
-	return &handler{inputStream}
+func New(inputStream <-chan rune) *humanInputGetter {
+	return &humanInputGetter{inputStream}
 }
 
-func (h *handler) GetInput() int {
+func (h *humanInputGetter) GetInput() int {
 	select {
 	case input := <-h.inputStream:
 		ir, ok := internalRepresentation[input]
