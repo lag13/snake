@@ -1,10 +1,17 @@
 ;;; snake.el --- Implementation of Snake for Emacs.
 
+(defun lag13/intersperse (i lst)
+  "Intersperse a value I into the list LST."
+  (if (cdr lst)
+      (cons (car lst) (cons i (lag13/intersperse i (cdr lst))))
+    lst))
+
 (defun lag13/make-grid (width height background-char)
   "Creates a grid consisting of the same background character."
   (erase-buffer)
   (dotimes (_ height)
-    (insert (make-string width background-char))
+    (let ((unspaced-line (make-list width background-char)))
+      (insert (concat (lag13/intersperse ?\s unspaced-line))))
     (newline)))
 
 (defun lag13/draw-char (x y width height char)
@@ -12,9 +19,15 @@
 character is drawn if it is off of the grid."
   (when (and (>= x 1) (<= x width)
              (>= y 1) (<= y height))
-    (goto-char (+ x (* (1- y) (1+ width))))
+    (goto-char (+ (1+ (* 2 (1- x))) (* (1- y) (* 2 width))))
     (delete-char 1)
     (insert char)))
+
+(defun lag13/draw-string (x y width height str)
+  "Draws a string on a grid using `lag13/draw-char'."
+  (loop for s across str
+        for i from x
+        do (lag13/draw-char i y width height s)))
 
 (defun lag13/draw-snake-body (width snake-body)
   "Draws the snake's body."
@@ -55,12 +68,22 @@ character is drawn if it is off of the grid."
         (< snake-heady 1)
         (> snake-heady height))))
 
-(defun lag13/snake-draw-game (width height snake-body food-pos)
+(defun lag13/snake-draw-game (width height snake-body food-pos score is-paused)
   "Draws the game of snake."
   (lag13/make-grid width height ?.)
   (when food-pos
     (lag13/draw-char (car food-pos) (cdr food-pos) width height ?*))
-  (lag13/draw-snake-body width snake-body))
+  (lag13/draw-snake-body width snake-body)
+  (when is-paused
+    (let ((paused-msg "[Paused]"))
+      (lag13/draw-string (- (/ width 2)
+                            (/ (length paused-msg) 2))
+                         (/ height 2)
+                         width
+                         height
+                         paused-msg)))
+ (goto-char (point-max))
+  (insert "Score: " (number-to-string score)))
 
 ;; I originally said it in the go implementation but I've added one
 ;; more note. I think the best structure for a game loop is:
@@ -76,27 +99,31 @@ character is drawn if it is off of the grid."
          (height 20)
          (snake-body '((2 . 2) (2 . 1) (1 . 1) (1 . 2)))
          (direction '(0 . 1))
-         (food-pos (lag13/gen-food-position width height snake-body)))
+         (food-pos (lag13/gen-food-position width height snake-body))
+         (score 0)
+         (is-paused nil))
     (while (not (or
                  (lag13/snake-won width height snake-body)
                  (lag13/snake-lost width height snake-body)))
-      (lag13/snake-draw-game width height snake-body food-pos)
-      (let ((key (read-event nil nil 2)))
-        (setq direction (cond
-                         ((eq key 'up) '(0 . -1))
-                         ((eq key 'down) '(0 . 1))
-                         ((eq key 'left) '(-1 . 0))
-                         ((eq key 'right) '(1 . 0))
-                         (t direction)))
+      (lag13/snake-draw-game width height snake-body food-pos score is-paused)
+      (let ((key (read-event nil nil 0.2)))
+        (cond
+         ((eq key 'up) (setq direction '(0 . -1)))
+         ((eq key 'down) (setq direction '(0 . 1)))
+         ((eq key 'left) (setq direction '(-1 . 0)))
+         ((eq key 'right) (setq direction '(1 . 0)))
+         ((eq key ?p) (setq is-paused (not is-paused)))))
+      (unless is-paused
         (let ((snake-new-head (lag13/add-cons-pair direction (car snake-body))))
           (cond
            ((equal food-pos snake-new-head)
+            (setq score (1+ score))
             (setq snake-body (cons snake-new-head snake-body))
             (setq food-pos (lag13/gen-food-position width height snake-body)))
            (t
             (setq snake-body (cons snake-new-head (butlast snake-body))))))))
-    (lag13/snake-draw-game width height snake-body food-pos)
+    (lag13/snake-draw-game width height snake-body food-pos score nil)
     (goto-char (point-max))
-    (if (lag13/snake-won width height snake-body)
-        (insert "Holy shit you won!!")
-      (insert "You lost"))))
+    (newline)
+    (when (lag13/snake-won width height snake-body)
+      (insert "Holy shit you won!!"))))
