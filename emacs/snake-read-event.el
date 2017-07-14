@@ -82,9 +82,7 @@
          (food-pos (lag13/gen-food-position width height snake-body))
          (score 0)
          (is-paused nil))
-    (while (not (or
-                 (lag13/snake-won width height snake-body)
-                 (lag13/snake-lost width height snake-body)))
+    (while (not (lag13/snake-game-is-over width height snake-body))
       (lag13/snake-draw-game width height snake-body food-pos score is-paused)
       (let ((key (read-event nil nil 0.2)))
         (cond
