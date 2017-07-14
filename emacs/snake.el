@@ -101,7 +101,8 @@
   (define-key lag13/snake-mode-map (kbd "<right>") 'lag13/snake-move-right)
   (define-key lag13/snake-mode-map (kbd "<up>") 'lag13/snake-move-up)
   (define-key lag13/snake-mode-map (kbd "<down>") 'lag13/snake-move-down)
-  (define-key lag13/snake-mode-map (kbd "p") 'lag13/snake-pause))
+  (define-key lag13/snake-mode-map (kbd "p") 'lag13/snake-pause)
+  (define-key lag13/snake-mode-map (kbd "n") 'lag13/snake))
 
 (defun lag13/get-direction ()
   "Set's the current direction that the snake is traveling in."
@@ -131,6 +132,10 @@
 
 (defun lag13/snake-init ()
   "Initializes the game of snake."
+  ;; The game function could be invoked in the middle of another game
+  ;; so we need to clean up this timer, otherwise it will generate
+  ;; another one (which makes the game go twice as fast haha).
+  (lag13/snake-cancel-timer)
   (setq *lag13/snake-body* '((2 . 2) (2 . 1) (1 . 1) (1 . 2)))
   (setq *lag13/snake-direction* '(0 . 1))
   (setq *lag13/snake-direction-queue* nil)
