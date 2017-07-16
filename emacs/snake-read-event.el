@@ -5,9 +5,11 @@
 ;;; Commentary:
 
 ;; It's worth noting that emacs already has a built in snake game (of
-;; course it does), I just felt like making my own. From my
-;; experimentation with making games/animations I've learned a couple
-;; things:
+;; course it does), I just felt like making my own. This is my less
+;; preferred version of snake that I made but I kept it since it
+;; handles input differently and thought it would be nice to keep a
+;; record of that lying around somehwere. From my experimentation with
+;; making games/animations I've learned a couple things:
 
 ;; 1. When elisp code is being executed any keys you press are ignored
 ;; unless you explicitly read them in your code. One exception to this
@@ -63,13 +65,11 @@
 
 (load-file "util.el")
 
-;; I originally said it in the go implementation but I've added one
-;; more note. I think the best structure for a game loop is:
-;; 1. Render (the initial game state should be drawn after all)
-;; 2. Sleep (gives the player time to see the game and respond to it's current state
-;; 3. Get input
-;; 4. Update the game state
-;; 5. After the game loop exits (presumably due to a win or loss) redraw the game so the "end" state of the game can be seen
+(defun lag13/snake-read-event-new-dir (old-dir new-dir)
+  (if (lag13/are-perpendicular old-dir new-dir)
+      new-dir
+    old-dir))
+
 (defun lag13/snake-read-event ()
   "Starts the game of snake."
   (interactive)
@@ -84,12 +84,12 @@
          (is-paused nil))
     (while (not (lag13/snake-game-is-over width height snake-body))
       (lag13/snake-draw-game width height snake-body food-pos score is-paused)
-      (let ((key (read-event nil nil 0.2)))
+      (let ((key (read-event nil nil 0.1)))
         (cond
-         ((eq key 'up) (setq direction '(0 . -1)))
-         ((eq key 'down) (setq direction '(0 . 1)))
-         ((eq key 'left) (setq direction '(-1 . 0)))
-         ((eq key 'right) (setq direction '(1 . 0)))
+         ((eq key 'up) (setq direction (lag13/snake-read-event-new-dir direction '(0 . -1))))
+         ((eq key 'down) (setq direction (lag13/snake-read-event-new-dir direction '(0 . 1))))
+         ((eq key 'left) (setq direction (lag13/snake-read-event-new-dir direction '(-1 . 0))))
+         ((eq key 'right) (setq direction (lag13/snake-read-event-new-dir direction '(1 . 0))))
          ((eq key ?p) (setq is-paused (not is-paused)))))
       (unless is-paused
         (let ((snake-new-head (lag13/add-cons-pair direction (car snake-body))))
