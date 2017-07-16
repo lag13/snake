@@ -2,6 +2,13 @@
 ;;; snake which work a little differently but this code can still be
 ;;; shared.
 
+(defun lag13/are-perpendicular (v1 v2)
+  "Returns t if V1 and V2 are perpendicular to one another.
+According to linear algebra, two vectors are orthogonal if their
+dot product is 0."
+  (zerop (+ (* (car v1) (car v2))
+	    (* (cdr v1) (cdr v2)))))
+
 (defun lag13/intersperse (i lst)
   "Intersperse a value I into the list LST."
   (if (cdr lst)
@@ -98,4 +105,3 @@ character is drawn if it is off of the grid."
       (if (lag13/snake-won width height snake-body)
           (insert "Holy shit you won!!")
         (insert "You lost. Then again one usually \"loses\" at snake")))))
-    

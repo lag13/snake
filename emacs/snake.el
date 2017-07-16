@@ -5,7 +5,8 @@
 ;;; Commentary:
 
 ;; A different implementation of snake where the key presses are
-;; defined as key mappings.
+;; defined as key mappings which I believe is the preferred way of
+;; making games (I like it more as well).
 
 (load-file "util.el")
 
@@ -42,37 +43,31 @@
       (car *lag13/snake-direction-queue*)
     *lag13/snake-direction*))
 
-(defun lag13/snake-was-vertical-dir ()
-  "Returns t if the previously entered direction was vertical."
-  (zerop (car (lag13/snake-previous-entered-direction))))
+(defun lag13/snake-add-direction-to-queue (dir)
+  "Adds a newly entered direction to the queue if the direction
+is valid."
+  (when (lag13/are-perpendicular dir (lag13/snake-previous-entered-direction))
+    (push dir *lag13/snake-direction-queue*)))
 
 (defun lag13/snake-move-left ()
   "Moves the snake to the left."
   (interactive)
-  (when (lag13/snake-was-vertical-dir)
-    (push '(-1 . 0) *lag13/snake-direction-queue*)))
+  (lag13/snake-add-direction-to-queue '(-1 . 0)))
 
 (defun lag13/snake-move-right ()
   "Moves the snake to the right."
   (interactive)
-  (when (lag13/snake-was-vertical-dir)
-    (push '(1 . 0) *lag13/snake-direction-queue*)))
-
-(defun lag13/snake-was-horizontal-dir ()
-  "Returns t if the previously entered direction was horizontal."
-  (zerop (cdr (lag13/snake-previous-entered-direction))))
+  (lag13/snake-add-direction-to-queue '(1 . 0)))
 
 (defun lag13/snake-move-up ()
   "Moves the snake to the up."
   (interactive)
-  (when (lag13/snake-was-horizontal-dir)
-    (push '(0 . -1) *lag13/snake-direction-queue*)))
+  (lag13/snake-add-direction-to-queue '(0 . -1)))
 
 (defun lag13/snake-move-down ()
   "Moves the snake to the down."
   (interactive)
-  (when (lag13/snake-was-horizontal-dir)
-    (push '(0 . 1) *lag13/snake-direction-queue*)))
+  (lag13/snake-add-direction-to-queue '(0 . 1)))
 
 (defun lag13/snake-pause ()
   "Pauses the game."
