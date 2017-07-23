@@ -10,10 +10,10 @@
 
 (load-file "util.el")
 
-(defconst *lag13/snake-board-width* 20
+(defconst *lag13/snake-board-width* 15
   "The width of the snake game.")
 
-(defconst *lag13/snake-board-height* 20
+(defconst *lag13/snake-board-height* 15
   "The height of the snake game.")
 
 (defvar *lag13/snake-direction* nil
@@ -131,7 +131,7 @@ is valid."
   ;; so we need to clean up this timer, otherwise it will generate
   ;; another one (which makes the game go twice as fast haha).
   (lag13/snake-cancel-timer)
-  (setq *lag13/snake-body* '((2 . 2) (2 . 1) (1 . 1) (1 . 2)))
+  (setq *lag13/snake-body* '((1 . 1) (1 . 0) (0 . 0) (0 . 1)))
   (setq *lag13/snake-direction* '(0 . 1))
   (setq *lag13/snake-direction-queue* nil)
   (setq *lag13/snake-food-pos* (lag13/gen-food-position *lag13/snake-board-width* *lag13/snake-board-height* *lag13/snake-body*))
