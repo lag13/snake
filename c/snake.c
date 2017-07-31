@@ -1,294 +1,160 @@
 #include <ncurses.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <strings.h>
 #include <time.h>
-#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include "util.h"
 
-typedef struct pos
-{
-    int y;
-    int x;
-} pos;
-
-typedef struct pos_list
-{
-    pos *list;
-    int len;
-} pos_list;
-
-int positions_are_equal(pos a, pos b)
-{
-    return a.y == b.y && a.x == b.x;
+// drawCharOnGrid draws a character on the game grid.
+void drawCharOnGrid(int x, int y, char c) {
+  // On my terminal, doubling the width makes the game more
+  // proportional
+  mvaddch(y, 2*x, c);
 }
 
-int headHitSnakeBody(pos_list snake)
-{
-    for(int i = 1; i < snake.len; i++)
-    {
-        if(positions_are_equal(snake.list[0], snake.list[i]))
-        {
-            return 1;
-        }
+void drawGrid(int width, int height) {
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      drawCharOnGrid(x, y, '.');
     }
-    return 0;
+  }
 }
 
-int pos_list_positionExists(pos_list pl, pos to_find)
-{
-    for(int i = 0; i < pl.len; i++)
-    {
-        if(positions_are_equal(to_find, pl.list[i]))
-        {
-            return 1;
-        }
-    }
-    return 0;
+void drawSnake(posList snake) {
+  for (int i = 0; i < snake.len-1; i++) {
+    drawCharOnGrid(snake.list[i].x, snake.list[i].y, '#');
+  }
+  drawCharOnGrid(snake.list[snake.len-1].x, snake.list[snake.len-1].y, '@');
 }
 
-pos getNewFoodPosition(pos_list snake, int height, int width)
-{
-    pos food;
-    while(1)
-    {
-        food.y = rand() % height;
-        food.x = rand() % width;
-        if(!pos_list_positionExists(snake, food))
-        {
-            return food;
-        }
-    }
+void drawFood(pos food) {
+  drawCharOnGrid(food.x, food.y, '*');
 }
 
-const pos UP = { .y = -1, .x = 0 };
-const pos DOWN = { .y = 1, .x = 0 };
-const pos LEFT = { .y = 0, .x = -1 };
-const pos RIGHT = { .y = 0, .x = 1 };
-
-void initGameState(int height, int width, pos_list *snake, pos *food, pos *movement_dir)
-{
-    srand(time(NULL));
-    snake->list = malloc(sizeof *(snake->list) * height * width);
-    snake->list[0].y = 1;
-    snake->list[0].x = 1;
-    snake->list[1].y = 0;
-    snake->list[1].x = 1;
-    snake->list[2].y = 0;
-    snake->list[2].x = 0;
-    snake->list[3].y = 1;
-    snake->list[3].x = 0;
-    snake->len = 4;
-    pos fp = getNewFoodPosition(*snake, height, width);
-    *food = fp;
-    *movement_dir = DOWN;
-    initscr();
-    raw();
-    noecho();
-    timeout(0);
-    curs_set(0);
+void drawStrOnGrid(int x, int y, char* s) {
+  for (int i = 0; i < strlen(s); i++) {
+    drawCharOnGrid(x+i, y, s[i]);
+  }
 }
 
-void quitGame(pos_list *snake)
-{
-    while(getch() != ERR);
-    free(snake->list);
-    endwin();
+void drawPausedMsg(int width, int height, bool paused) {
+  if (paused) {
+    char* pauseMsg = "[Paused]";
+    drawStrOnGrid(width/2 - strlen(pauseMsg)/2, height/2, pauseMsg);
+  }
 }
 
-void drawSnake(pos_list snake)
-{
-    for(int i = 0; i < snake.len; i++)
-    {
-        mvaddch(snake.list[i].y, snake.list[i].x, ACS_BLOCK);
-    }
+void drawScore(int height, int score) {
+  mvprintw(height, 0, "Score: %d", score);
 }
 
-void drawFood(pos food)
-{
-    mvprintw(food.y, food.x, "@");
+void drawGameOverText(int height, bool wonGame) {
+  char* s;
+  if (wonGame) {
+    s = "Holy shit you won!!";
+  } else {
+    s = "You lost. Then again one usually \"loses\" at snake";
+  }
+  mvprintw(height+1, 0, s);
 }
 
-void drawBorder(int height, int width)
-{
-    for(int i = 0; i < height+1; i++)
-    {
-        mvaddch(i, width+1, ACS_VLINE);
-    }
-    move(height+1, 0);
-    for(int i = 0; i < width+1; i++)
-    {
-        addch(ACS_HLINE);
-    }
-    addch(ACS_LRCORNER);
+void render(int width, int height, posList snake, pos food, bool paused, int score) {
+  drawGrid(width, height);
+  drawSnake(snake);
+  drawFood(food);
+  drawPausedMsg(width, height, paused);
+  drawScore(height, score);
+  if (gameIsOver(width, height, snake)) {
+    drawGameOverText(height, gameIsWon(width, height, snake));
+  }
+  refresh();
 }
 
-void drawScore(int start_y, int score)
-{
-    mvprintw(start_y, 0, "Score: %d", score);
+dir getInput(dir curDirection) {
+  char c;
+  // When there is no delay to recieve characters, ERR indicates that
+  // no input was recieved.
+  while ((c = getch()) != ERR) {
+    if (c == 'w' && !dir_equal(curDirection, DOWN)) {
+      return UP;
+    }
+    if (c == 's' && !dir_equal(curDirection, UP)) {
+      return DOWN;
+    }
+    if (c == 'a' && !dir_equal(curDirection, RIGHT)) {
+      return LEFT;
+    }
+    if (c == 'd' && !dir_equal(curDirection, LEFT)) {
+      return RIGHT;
+    }
+    if (c == 'p') {
+      return PAUSED;
+    }
+  }
+  return curDirection;
 }
 
-void drawGame(pos_list snake, pos food, int height, int width)
-{
-    drawBorder(height, width);
-    drawScore(height+2, snake.len-1);
-    drawSnake(snake);
-    drawFood(food);
-    refresh();
-}
+int main(int argc, char** argv) {
+  int width, height;
+  posList snake;
+  pos food;
+  dir curDirection;
+  bool paused;
+  int score;
+  // This points to all allocated memory used by this game. The
+  // benefit of this is that memory is allocated and free'd only once.
+  // This variable need not exist but I liked the idea of having a
+  // "memory bookeeping" sort of variable which is independent of any
+  // particular application.
+  void* mem;
 
-void moveSnake(pos_list snake, pos movement_dir)
-{
-    int last_elem = snake.len-1;
-    mvaddch(snake.list[last_elem].y, snake.list[last_elem].x, ' ');
-    memmove(snake.list+1, snake.list, (snake.len-1) * sizeof *snake.list);
-    snake.list[0].y += movement_dir.y;
-    snake.list[0].x += movement_dir.x;
-}
+  // initializes ncurses:
+  // http://www.tldp.org/HOWTO/NCURSES-Programming-HOWTO/
+  initscr();
+  // makes it so input is immediately sent to the program instead of
+  // waiting for a newline (although when testing this wasn't
+  // necessary)
+  cbreak();
+  // prevents input from appearing on screen
+  noecho();
+  // hides the cursor
+  curs_set(0);
+  // so calls to getch() do not block
+  timeout(0);
+  srand(time(NULL));
+  width = 15, height = 15;
+  curDirection = DOWN;
+  paused = false;
+  score = 0;
+  mem = mustMalloc(width*height*sizeof(*snake.list));
+  snake.len = 4;
+  snake.list = mem;
+  snake.list[0] = (pos){ .x = 0, .y = 1 };
+  snake.list[1] = (pos){ .x = 0, .y = 0 };
+  snake.list[2] = (pos){ .x = 1, .y = 0 };
+  snake.list[3] = (pos){ .x = 1, .y = 1 };
+  food = createFood(width, height, snake);
 
-void generateFoodPosition(pos *food, pos_list snake, int height, int width)
-{
-    if(positions_are_equal(snake.list[0], *food))
-    {
-        pos f = getNewFoodPosition(snake, height, width);
-        *food = f;
+  struct timespec delay = {0, 100000000};
+  while (!gameIsOver(width, height, snake)) {
+    render(width, height, snake, food, paused, score);
+    nanosleep(&delay, NULL);
+    dir d = getInput(curDirection);
+    if (dir_equal(d, PAUSED)) {
+      paused = !paused;
+    } else {
+      curDirection = d;
     }
-}
+    if (!paused) {
+      updateGameState(width, height, &snake, &food, curDirection, &score);
+    }
+  }
 
-void setMovementDir(pos *movement_dir, int input_char)
-{
-    if(input_char == 'h' && !positions_are_equal(*movement_dir, RIGHT))
-    {
-        *movement_dir = LEFT;
-    }
-    if(input_char == 'j' && !positions_are_equal(*movement_dir, UP))
-    {
-        *movement_dir = DOWN;
-    }
-    if(input_char == 'k' && !positions_are_equal(*movement_dir, DOWN))
-    {
-        *movement_dir = UP;
-    }
-    if(input_char == 'l' && !positions_are_equal(*movement_dir, LEFT))
-    {
-        *movement_dir = RIGHT;
-    }
+  render(width, height, snake, food, paused, score);
+  // Eat unused input
+  while(getch() != ERR);
+  // Wait for the user to hit a key before quitting.
+  timeout(-1);
+  getch();
+  endwin();
+  free(mem);
 }
-
-void updateGameState(pos_list *snake, pos *food, pos *movement_dir, int *should_quit, int input_char, int height, int width)
-{
-    if(input_char != ERR)
-    {
-        if(input_char == 'q')
-        {
-            *should_quit = 1;
-            return;
-        }
-        setMovementDir(movement_dir, input_char);
-    }
-    pos save_tail_pos = snake->list[snake->len-1];
-    moveSnake(*snake, *movement_dir);
-    if(positions_are_equal(snake->list[0], *food))
-    {
-        snake->len += 1;
-        snake->list[snake->len-1] = save_tail_pos;
-    }
-    generateFoodPosition(food, *snake, height, width);
-}
-
-int outOfBounds(pos_list snake, int height, int width)
-{
-    if(snake.list[0].y < 0 || snake.list[0].y > height || snake.list[0].x < 0 || snake.list[0].x > width)
-    {
-        return 1;
-    }
-    return 0;
-}
-
-int gameContinues(int should_quit, pos_list snake, int height, int width)
-{
-    if(should_quit)
-    {
-        return 0;
-    }
-    if(snake.len == height*width)
-    {
-        return 0;
-    }
-    if(snake.len > 1 && headHitSnakeBody(snake))
-    {
-        return 0;
-    }
-    if(outOfBounds(snake, height, width))
-    {
-        return 0;
-    }
-    return 1;
-}
-
-int processInput(int *input, int *cur_input, int *next_input, int *num_input)
-{
-    int input_size = *num_input;
-    for(int i = 0; i < 2-input_size; i++)
-    {
-        int input_char = getch();
-        input[*next_input] = input_char;
-        if(input_char != ERR)
-        {
-            *next_input = (*next_input + 1) % 2;
-            (*num_input)++;
-        }
-    }
-    while(getch() != ERR);
-    int input_char = input[*cur_input];
-    if(input_char != ERR)
-    {
-        *cur_input = (*cur_input + 1) % 2;
-        (*num_input)--;
-    }
-    return input_char;
-}
-
-void gameLoop(pos_list snake, pos food, pos movement_dir, int height, int width)
-{
-    int input[2];
-    int current_input = 0;
-    int next_input = 0;
-    int should_quit = 0;
-    int num_input = 0;
-    struct timespec delay = {0, 82500000};
-    while(gameContinues(should_quit, snake, height, width))
-    {
-        drawGame(snake, food, height, width);
-        nanosleep(&delay, NULL);
-        int input_char = processInput(input, &current_input, &next_input, &num_input);
-        updateGameState(&snake, &food, &movement_dir, &should_quit, input_char, height, width);
-    }
-}
-
-int getBoardDimension(char *str)
-{
-    int num = atoi(str);
-    if(num < 5)
-    {
-        return 15;
-    }
-    return num;
-}
-
-int main(int argc, char **argv)
-{
-    int height = 15;
-    int width = 15;
-    if(argc == 3)
-    {
-        height = getBoardDimension(argv[0]);
-        width = getBoardDimension(argv[1]);
-    }
-    pos_list snake;
-    pos food;
-    pos movement_dir;
-    initGameState(height, width, &snake, &food, &movement_dir);
-    gameLoop(snake, food, movement_dir, height, width);
-    quitGame(&snake);
-}
-
