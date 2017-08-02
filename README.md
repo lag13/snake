@@ -45,3 +45,9 @@ problem.
      on developing C code.
    - I currently made one big header file which contains "snake
      utilities" but it could be broken up into multiple files.
+   - Right now I wait for a keypress before quitting out of the game,
+     but oftentimes a key is hit immediately so they don't get to see
+     the end game score and such. This could get when I change the
+     input handling to use a queue but just keep in mind that I want
+     them to C (C what I did there? (C what I did there? (infinite
+     recursion... ))) the end of game scenario.
