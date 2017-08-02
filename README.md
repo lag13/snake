@@ -33,3 +33,15 @@ initially no interactions.
 (4) and (5) will probably be meshed together but it is worth
 considering them separately as it can help when thinking about the
 problem.
+
+## TODO:
+1. There still is some refactoring I want to do for the C
+   implementation. In particular:
+   - Right now we rely on ncurses ability to get input or return ERR
+     if no input is available but I think the logic would be more
+     portable if we get input in a separate thread and add it to a
+     shared queue. So do this.
+   - Consider writing a little .org file in the C directory for tips
+     on developing C code.
+   - I currently made one big header file which contains "snake
+     utilities" but it could be broken up into multiple files.
