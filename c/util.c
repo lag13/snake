@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "util.h"
 
 void* mustMalloc(size_t size) {
@@ -13,6 +14,12 @@ void* mustMalloc(size_t size) {
   }
   return ptr;
 }
+
+const dir UP = { .x = 0, .y = -1 };
+const dir DOWN = { .x = 0, .y = 1 };
+const dir LEFT = { .x = -1, .y = 0 };
+const dir RIGHT = { .x = 1, .y = 0 };
+const dir PAUSED = { .x = 0, .y = 0 };
 
 bool dir_equal(dir a, dir b) {
   return a.x == b.x && a.y == b.y;
