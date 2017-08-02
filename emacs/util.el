@@ -52,8 +52,8 @@ character is drawn if it is off of the grid."
   "Draws a string from left to right on a grid using
 `lag13/draw-char'."
   (cl-loop for s across str
-        for i from x
-        do (lag13/draw-char i y width height s)))
+	   for i from x
+	   do (lag13/draw-char i y width height s)))
 
 (defun lag13/draw-snake-body (width snake-body)
   "Draws the snake's body."
@@ -69,8 +69,8 @@ character is drawn if it is off of the grid."
 (defun lag13/gen-all-grid-positions (width height)
   "Generates a list of cons cells for each position in the grid."
   (cl-loop for i from 0 to (1- (* width height))
-        collect (cons (% i width)
-                      (/ i width))))
+	   collect (cons (% i width)
+			 (/ i width))))
 
 (defun lag13/gen-food-position (width height snake-body)
   "Generates a new position for the food."
