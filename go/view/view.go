@@ -6,10 +6,6 @@ import (
 	"github.com/lag13/snake/Go/model"
 )
 
-// TODO: Maybe draw the board in the middle of the terminal instead of the
-// upper left hand corner. Perhaps make this configurable. Maybe also make the
-// game itself bounce around the screen. That could be fun.
-
 type clearScreen func()
 
 type drawCell func(x int, y int, ch rune)

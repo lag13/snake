@@ -18,10 +18,6 @@ const (
 )
 
 var internalRepresentation = map[rune]int{
-	'h': Left,
-	'j': Down,
-	'k': Up,
-	'l': Right,
 	'a': Left,
 	's': Down,
 	'w': Up,

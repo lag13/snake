@@ -1,160 +1,75 @@
-#include <ncurses.h>
-#include <time.h>
+// rand()
 #include <stdlib.h>
-#include <string.h>
-#include "util.h"
 
-// drawCharOnGrid draws a character on the game grid.
-void drawCharOnGrid(int x, int y, char c) {
-  // On my terminal, doubling the width makes the game more
-  // proportional
-  mvaddch(y, 2*x, c);
-}
+#include "snake.h"
 
-void drawGrid(int width, int height) {
+pos createFood(int width, int height, posList snake) {
+  // The high level view of how this code works: (1) Creates a list of
+  // open positions (i.e positions not occuipied by the snake) and (2)
+  // grabs a random element from that list. But it does this without
+  // creating a list of open positions.
+  int maxRand = width*height - snake.len;
+  if (maxRand <= 0) {
+    return (pos){ .x = -1, .y = -1 };
+  }
+  int randIndex = rand() % maxRand;
+  int curRandIndex = 0;
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
-      drawCharOnGrid(x, y, '.');
+      pos p = { .x = x, .y = y };
+      if (posList_contains(snake, p)) {
+	continue;
+      }
+      if (curRandIndex == randIndex) {
+	return p;
+      }
+      curRandIndex++;
     }
   }
+  // This should never be reached but I added it to get rid of the
+  // compiler warning.
+  return (pos){ .x = -1, .y = -1 };
 }
 
-void drawSnake(posList snake) {
-  for (int i = 0; i < snake.len-1; i++) {
-    drawCharOnGrid(snake.list[i].x, snake.list[i].y, '#');
+bool gameIsWon(int width, int height, posList snake) {
+  return width*height == snake.len;
+}
+
+bool gameIsLost(int width, int height, posList snake) {
+  {
+    posList headless = snake;
+    headless.len--;
+    if (posList_contains(headless, snake.list[snake.len-1])) {
+      return true;
+    }
   }
-  drawCharOnGrid(snake.list[snake.len-1].x, snake.list[snake.len-1].y, '@');
-}
-
-void drawFood(pos food) {
-  drawCharOnGrid(food.x, food.y, '*');
-}
-
-void drawStrOnGrid(int x, int y, char* s) {
-  for (int i = 0; i < strlen(s); i++) {
-    drawCharOnGrid(x+i, y, s[i]);
+  {
+    pos head = snake.list[snake.len-1];
+    if (head.x < 0 || width <= head.x) {
+      return true;
+    }
+    if (head.y < 0 || height <= head.y) {
+      return true;
+    }
   }
+  return false;
 }
 
-void drawPausedMsg(int width, int height, bool paused) {
-  if (paused) {
-    char* pauseMsg = "[Paused]";
-    drawStrOnGrid(width/2 - strlen(pauseMsg)/2, height/2, pauseMsg);
-  }
+bool gameIsDone(int width, int height, posList snake) {
+  return gameIsWon(width, height, snake) || gameIsLost(width, height, snake);
 }
 
-void drawScore(int height, int score) {
-  mvprintw(height, 0, "Score: %d", score);
-}
-
-void drawGameOverText(int height, bool wonGame) {
-  char* s;
-  if (wonGame) {
-    s = "Holy shit you won!!";
+void updateGameState(int width, int height, posList* snake, pos* food, dir d, int* score) {
+  pos newHead = { .x = snake->list[snake->len-1].x + d.x, .y = snake->list[snake->len-1].y + d.y };
+  if (pos_equal(newHead, *food)) {
+    *snake = posList_append(*snake, newHead);
+    *food = createFood(width, height, *snake);
+    (*score)++;
   } else {
-    s = "You lost. Then again one usually \"loses\" at snake";
+    for (int i = 0; i < snake->len-1; i++) {
+      snake->list[i] = snake->list[i+1];
+    }
+    snake->list[snake->len-1].x += d.x;
+    snake->list[snake->len-1].y += d.y;
   }
-  mvprintw(height+1, 0, s);
-}
-
-void render(int width, int height, posList snake, pos food, bool paused, int score) {
-  drawGrid(width, height);
-  drawSnake(snake);
-  drawFood(food);
-  drawPausedMsg(width, height, paused);
-  drawScore(height, score);
-  if (gameIsOver(width, height, snake)) {
-    drawGameOverText(height, gameIsWon(width, height, snake));
-  }
-  refresh();
-}
-
-dir getInput(dir curDirection) {
-  char c;
-  // When there is no delay to recieve characters, ERR indicates that
-  // no input was recieved.
-  while ((c = getch()) != ERR) {
-    if (c == 'w' && !dir_equal(curDirection, DOWN)) {
-      return UP;
-    }
-    if (c == 's' && !dir_equal(curDirection, UP)) {
-      return DOWN;
-    }
-    if (c == 'a' && !dir_equal(curDirection, RIGHT)) {
-      return LEFT;
-    }
-    if (c == 'd' && !dir_equal(curDirection, LEFT)) {
-      return RIGHT;
-    }
-    if (c == 'p') {
-      return PAUSED;
-    }
-  }
-  return curDirection;
-}
-
-int main(int argc, char** argv) {
-  int width, height;
-  posList snake;
-  pos food;
-  dir curDirection;
-  bool paused;
-  int score;
-  // This points to all allocated memory used by this game. The
-  // benefit of this is that memory is allocated and free'd only once.
-  // This variable need not exist but I liked the idea of having a
-  // "memory bookeeping" sort of variable which is independent of any
-  // particular application.
-  void* mem;
-
-  // initializes ncurses:
-  // http://www.tldp.org/HOWTO/NCURSES-Programming-HOWTO/
-  initscr();
-  // makes it so input is immediately sent to the program instead of
-  // waiting for a newline (although when testing this wasn't
-  // necessary)
-  cbreak();
-  // prevents input from appearing on screen
-  noecho();
-  // hides the cursor
-  curs_set(0);
-  // so calls to getch() do not block
-  timeout(0);
-  srand(time(NULL));
-  width = 15, height = 15;
-  curDirection = DOWN;
-  paused = false;
-  score = 0;
-  mem = mustMalloc(width*height*sizeof(*snake.list));
-  snake.len = 4;
-  snake.list = mem;
-  snake.list[0] = (pos){ .x = 0, .y = 1 };
-  snake.list[1] = (pos){ .x = 0, .y = 0 };
-  snake.list[2] = (pos){ .x = 1, .y = 0 };
-  snake.list[3] = (pos){ .x = 1, .y = 1 };
-  food = createFood(width, height, snake);
-
-  struct timespec delay = {0, 100000000};
-  while (!gameIsOver(width, height, snake)) {
-    render(width, height, snake, food, paused, score);
-    nanosleep(&delay, NULL);
-    dir d = getInput(curDirection);
-    if (dir_equal(d, PAUSED)) {
-      paused = !paused;
-    } else {
-      curDirection = d;
-    }
-    if (!paused) {
-      updateGameState(width, height, &snake, &food, curDirection, &score);
-    }
-  }
-
-  render(width, height, snake, food, paused, score);
-  // Eat unused input
-  while(getch() != ERR);
-  // Wait for the user to hit a key before quitting.
-  timeout(-1);
-  getch();
-  endwin();
-  free(mem);
 }

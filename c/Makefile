@@ -1,16 +1,25 @@
-all: snake
+all: run
 
-run: snake
+run: build
 	./a.out
 
-snake: snake.o util.o
-	gcc -l ncurses snake.o util.o
+build: main.o stdlibutil.o pos.o dir.o snake.o
+	gcc -l ncurses main.o stdlibutil.o pos.o dir.o snake.o
+
+main.o: main.c
+	gcc -c -Wall main.c
+
+stdlibutil.o: stdlibutil.c
+	gcc -c -Wall stdlibutil.c
+
+pos.o: pos.c
+	gcc -c -Wall pos.c
+
+dir.o: dir.c
+	gcc -c -Wall dir.c
 
 snake.o: snake.c
 	gcc -c -Wall snake.c
-
-util.o: util.c
-	gcc -c -Wall util.c
 
 .PHONY: clean
 clean:

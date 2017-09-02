@@ -92,10 +92,10 @@ is valid."
   ;; reference to the cancelled timer). That last t paramter makes
   ;; this hook addition only apply in the "snake" buffer.
   (add-hook 'kill-buffer-hook 'lag13/snake-cancel-timer nil t)
-  (define-key lag13/snake-mode-map (kbd "<left>") 'lag13/snake-move-left)
-  (define-key lag13/snake-mode-map (kbd "<right>") 'lag13/snake-move-right)
-  (define-key lag13/snake-mode-map (kbd "<up>") 'lag13/snake-move-up)
-  (define-key lag13/snake-mode-map (kbd "<down>") 'lag13/snake-move-down)
+  (define-key lag13/snake-mode-map (kbd "a") 'lag13/snake-move-left)
+  (define-key lag13/snake-mode-map (kbd "d") 'lag13/snake-move-right)
+  (define-key lag13/snake-mode-map (kbd "w") 'lag13/snake-move-up)
+  (define-key lag13/snake-mode-map (kbd "s") 'lag13/snake-move-down)
   (define-key lag13/snake-mode-map (kbd "p") 'lag13/snake-pause)
   (define-key lag13/snake-mode-map (kbd "n") 'lag13/snake))
 
