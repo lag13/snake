@@ -15,6 +15,8 @@
 
 // mustMalloc()
 #include "stdlibutil.h"
+// must_pthread_mutex_init()
+#include "pthreadutil.h"
 // pos
 // posList
 #include "pos.h"
@@ -81,7 +83,13 @@ void drawGameOverText(int height, bool wonGame) {
   mvprintw(height+1, 0, s);
 }
 
+// It turns out that ncurses is not thread safe so we need to have
+// this mutex to prevent multiple threads from executing nucurses
+// functions at the same time.
+pthread_mutex_t ncursesMu;
+
 void render(int width, int height, posList snake, pos food, bool paused, int score) {
+  pthread_mutex_lock(&ncursesMu);
   drawGrid(width, height);
   drawSnake(snake);
   drawFood(food);
@@ -91,6 +99,7 @@ void render(int width, int height, posList snake, pos food, bool paused, int sco
     drawGameOverText(height, gameIsWon(width, height, snake));
   }
   refresh();
+  pthread_mutex_unlock(&ncursesMu);
 }
 
 const dir NO_DIRECTION = { .x = 0, .y = 0 };
@@ -115,7 +124,9 @@ playeractionQueue *queue;
 
 void *getInput() {
   while (1) {
+    pthread_mutex_lock(&ncursesMu);
     char c = getch();
+    pthread_mutex_unlock(&ncursesMu);
     if (c == 'w') {
       playeractionQueue_enqueue(queue, UP);
       continue;
@@ -162,10 +173,8 @@ int main(int argc, char** argv) {
   paused = false;
   score = 0;
   pthread_mutex_t mu;
-  if (pthread_mutex_init(&mu, NULL) != 0) {
-    printf("mutex init failed\n");
-    exit(1);
-  }
+  must_pthread_mutex_init(&mu, NULL);
+  must_pthread_mutex_init(&ncursesMu, NULL);
   size_t snakeSpaceOccupies = width*height*sizeof(*snake.list);
   mem = mustMalloc(snakeSpaceOccupies + PLAYERACTIONQUEUE_SPACEOCCUPIED);
   snake.list = mem;
@@ -187,12 +196,10 @@ int main(int argc, char** argv) {
   noecho();
   // hides the cursor
   curs_set(0);
+  // so calls to getch() do not block
+  timeout(0);
   pthread_t threadID;
-  int err = pthread_create(&threadID, NULL, &getInput, NULL);
-  if (err != 0) {
-    printf("error creating thread: %s (%d)\n", strerror(err), err);
-    exit(1);
-  }
+  must_pthread_create(&threadID, NULL, &getInput, NULL);
 
   struct timespec delay = {0, 100000000};
   while (!gameIsDone(width, height, snake)) {
@@ -215,6 +222,6 @@ int main(int argc, char** argv) {
   }
 
   render(width, height, snake, food, paused, score);
-  endwin();
   free(mem);
+  endwin();
 }
