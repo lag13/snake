@@ -10,6 +10,8 @@
 // srand()
 // free()
 #include <stdlib.h>
+// pthread_t
+#include <pthread.h>
 
 // mustMalloc()
 #include "stdlibutil.h"
@@ -24,12 +26,6 @@
 // updateGameState()
 // etc...
 #include "snake.h"
-
-const dir UP = { .x = 0, .y = -1 };
-const dir DOWN = { .x = 0, .y = 1 };
-const dir LEFT = { .x = -1, .y = 0 };
-const dir RIGHT = { .x = 1, .y = 0 };
-const dir PAUSED = { .x = 0, .y = 0 };
 
 void drawCharOnGrid(int x, int y, char c) {
   // On my terminal doubling the width seems to makes the game look
@@ -97,28 +93,50 @@ void render(int width, int height, posList snake, pos food, bool paused, int sco
   refresh();
 }
 
-dir getInput(dir curDirection) {
-  char c;
-  // When there is no delay to recieve characters, ERR indicates that
-  // no input was recieved.
-  while ((c = getch()) != ERR) {
-    if (c == 'w' && !dir_equal(curDirection, DOWN)) {
-      return UP;
+const dir NO_DIRECTION = { .x = 0, .y = 0 };
+
+dir actionToDirection(playeraction a) {
+  if (a == UP) {
+    return (dir){ .x = 0, .y = -1 };
+  }
+  if (a == DOWN) {
+    return (dir){ .x = 0, .y = 1 };
+  }
+  if (a == LEFT) {
+    return (dir){ .x = -1, .y = 0 };
+  }
+  if (a == RIGHT) {
+    return (dir){ .x = 1, .y = 0 };
+  }
+  return NO_DIRECTION;
+}
+
+playeractionQueue *queue;
+
+void *getInput() {
+  while (1) {
+    char c = getch();
+    if (c == 'w') {
+      playeractionQueue_enqueue(queue, UP);
+      continue;
     }
-    if (c == 's' && !dir_equal(curDirection, UP)) {
-      return DOWN;
+    if (c == 's') {
+      playeractionQueue_enqueue(queue, DOWN);
+      continue;
     }
-    if (c == 'a' && !dir_equal(curDirection, RIGHT)) {
-      return LEFT;
+    if (c == 'a') {
+      playeractionQueue_enqueue(queue, LEFT);
+      continue;
     }
-    if (c == 'd' && !dir_equal(curDirection, LEFT)) {
-      return RIGHT;
+    if (c == 'd') {
+      playeractionQueue_enqueue(queue, RIGHT);
+      continue;
     }
     if (c == 'p') {
-      return PAUSED;
+      playeractionQueue_enqueue(queue, PAUSE);
+      continue;
     }
   }
-  return curDirection;
 }
 
 int main(int argc, char** argv) {
@@ -138,42 +156,58 @@ int main(int argc, char** argv) {
   // how big the chunk is.
   void* mem;
 
-  // initializes ncurses:
-  // http://www.tldp.org/HOWTO/NCURSES-Programming-HOWTO/
-  initscr();
-  // makes it so input is immediately sent to the program instead of
-  // waiting for a newline (although when testing this wasn't
-  // necessary)
-  cbreak();
-  // prevents input from appearing on screen
-  noecho();
-  // hides the cursor
-  curs_set(0);
-  // so calls to getch() do not block
-  timeout(0);
   srand(time(NULL));
   width = 15, height = 15;
-  curDirection = DOWN;
+  curDirection = actionToDirection(DOWN);
   paused = false;
   score = 0;
-  mem = mustMalloc(width*height*sizeof(*snake.list) + );
-  snake.len = 4;
+  pthread_mutex_t mu;
+  if (pthread_mutex_init(&mu, NULL) != 0) {
+    printf("mutex init failed\n");
+    exit(1);
+  }
+  size_t snakeSpaceOccupies = width*height*sizeof(*snake.list);
+  mem = mustMalloc(snakeSpaceOccupies + PLAYERACTIONQUEUE_SPACEOCCUPIED);
   snake.list = mem;
+  queue = &(playeractionQueue) { .arr = (mem+snakeSpaceOccupies), .mu = &mu };
+  snake.len = 4;
   snake.list[0] = (pos){ .x = 0, .y = 1 };
   snake.list[1] = (pos){ .x = 0, .y = 0 };
   snake.list[2] = (pos){ .x = 1, .y = 0 };
   snake.list[3] = (pos){ .x = 1, .y = 1 };
   food = createFood(width, height, snake);
+  // initializes ncurses:
+  // http://www.tldp.org/HOWTO/NCURSES-Programming-HOWTO/
+  initscr();
+  // makes it so input is immediately sent to the program instead of
+  // waiting for a newline (oddly though when testing this wasn't
+  // necessary but I'm keeping it because that's what the docs say).
+  cbreak();
+  // prevents player input from appearing on screen
+  noecho();
+  // hides the cursor
+  curs_set(0);
+  pthread_t threadID;
+  int err = pthread_create(&threadID, NULL, &getInput, NULL);
+  if (err != 0) {
+    printf("error creating thread: %s (%d)\n", strerror(err), err);
+    exit(1);
+  }
 
   struct timespec delay = {0, 100000000};
   while (!gameIsDone(width, height, snake)) {
     render(width, height, snake, food, paused, score);
     nanosleep(&delay, NULL);
-    dir d = getInput(curDirection);
-    if (dir_equal(d, PAUSED)) {
+    playeraction action = playeractionQueue_dequeue(queue);
+    while (!dir_orthogonal(curDirection, actionToDirection(action))) {
+      action = playeractionQueue_dequeue(queue);
+    }
+    dir newDir = actionToDirection(action);
+    if (!dir_equal(newDir, NO_DIRECTION)) {
+      curDirection = newDir;
+    }
+    if (action == PAUSE) {
       paused = !paused;
-    } else {
-      curDirection = d;
     }
     if (!paused) {
       updateGameState(width, height, &snake, &food, curDirection, &score);
@@ -181,11 +215,6 @@ int main(int argc, char** argv) {
   }
 
   render(width, height, snake, food, paused, score);
-  // Eat unused input
-  while(getch() != ERR);
-  // Wait for the user to hit a key before quitting.
-  timeout(-1);
-  getch();
   endwin();
   free(mem);
 }
