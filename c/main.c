@@ -2,12 +2,10 @@
 // mvaddch()
 // etc...
 #include <ncurses.h>
-// time()
 // timespec
 #include <time.h>
 // strlen()
 #include <string.h>
-// srand()
 // free()
 #include <stdlib.h>
 // pthread_t
@@ -85,11 +83,13 @@ void drawGameOverText(int height, bool wonGame) {
 
 // It turns out that ncurses is not thread safe so we need to have
 // this mutex to prevent multiple threads from executing nucurses
-// functions at the same time.
+// functions at the same time:
+// http://www.linuxmisc.com/9-unix-programmer/87e7383a80449bf7.htm
 pthread_mutex_t ncursesMu;
 
 void render(int width, int height, posList snake, pos food, bool paused, int score) {
   pthread_mutex_lock(&ncursesMu);
+  clear();
   drawGrid(width, height);
   drawSnake(snake);
   drawFood(food);
@@ -98,26 +98,10 @@ void render(int width, int height, posList snake, pos food, bool paused, int sco
   if (gameIsDone(width, height, snake)) {
     drawGameOverText(height, gameIsWon(width, height, snake));
   }
+  // TODO: Display the controls. To do this we need to create a hash
+  // table of char -> playeraction.
   refresh();
   pthread_mutex_unlock(&ncursesMu);
-}
-
-const dir NO_DIRECTION = { .x = 0, .y = 0 };
-
-dir actionToDirection(playeraction a) {
-  if (a == UP) {
-    return (dir){ .x = 0, .y = -1 };
-  }
-  if (a == DOWN) {
-    return (dir){ .x = 0, .y = 1 };
-  }
-  if (a == LEFT) {
-    return (dir){ .x = -1, .y = 0 };
-  }
-  if (a == RIGHT) {
-    return (dir){ .x = 1, .y = 0 };
-  }
-  return NO_DIRECTION;
 }
 
 playeractionQueue *queue;
@@ -147,6 +131,14 @@ void *getInput() {
       playeractionQueue_enqueue(queue, PAUSE);
       continue;
     }
+    if (c == 'q') {
+      playeractionQueue_enqueue(queue, QUIT);
+      continue;
+    }
+    if (c == 'n') {
+      playeractionQueue_enqueue(queue, NEW_GAME);
+      continue;
+    }
   }
 }
 
@@ -167,24 +159,14 @@ int main(int argc, char** argv) {
   // how big the chunk is.
   void* mem;
 
-  srand(time(NULL));
   width = 15, height = 15;
-  curDirection = actionToDirection(DOWN);
-  paused = false;
-  score = 0;
-  pthread_mutex_t mu;
-  must_pthread_mutex_init(&mu, NULL);
-  must_pthread_mutex_init(&ncursesMu, NULL);
   size_t snakeSpaceOccupies = width*height*sizeof(*snake.list);
   mem = mustMalloc(snakeSpaceOccupies + PLAYERACTIONQUEUE_SPACEOCCUPIED);
   snake.list = mem;
+  pthread_mutex_t mu;
+  must_pthread_mutex_init(&mu, NULL);
   queue = &(playeractionQueue) { .arr = (mem+snakeSpaceOccupies), .mu = &mu };
-  snake.len = 4;
-  snake.list[0] = (pos){ .x = 0, .y = 1 };
-  snake.list[1] = (pos){ .x = 0, .y = 0 };
-  snake.list[2] = (pos){ .x = 1, .y = 0 };
-  snake.list[3] = (pos){ .x = 1, .y = 1 };
-  food = createFood(width, height, snake);
+  initState(width, height, &snake, &food, queue, &curDirection, &paused, &score);
   // initializes ncurses:
   // http://www.tldp.org/HOWTO/NCURSES-Programming-HOWTO/
   initscr();
@@ -198,30 +180,34 @@ int main(int argc, char** argv) {
   curs_set(0);
   // so calls to getch() do not block
   timeout(0);
+  must_pthread_mutex_init(&ncursesMu, NULL);
   pthread_t threadID;
   must_pthread_create(&threadID, NULL, &getInput, NULL);
 
+  // TODO: I sort of feel like this entire game loop should be the
+  // only exposed function from the snake package. Should we go and do
+  // this?
   struct timespec delay = {0, 100000000};
-  while (!gameIsDone(width, height, snake)) {
+  while (true) {
     render(width, height, snake, food, paused, score);
     nanosleep(&delay, NULL);
     playeraction action = playeractionQueue_dequeue(queue);
     while (!dir_orthogonal(curDirection, actionToDirection(action))) {
       action = playeractionQueue_dequeue(queue);
     }
-    dir newDir = actionToDirection(action);
-    if (!dir_equal(newDir, NO_DIRECTION)) {
-      curDirection = newDir;
+    if (action == QUIT) {
+      break;
     }
-    if (action == PAUSE) {
-      paused = !paused;
+    if (action == NEW_GAME) {
+        initState(width, height, &snake, &food, queue, &curDirection, &paused, &score);
+	continue;
     }
-    if (!paused) {
-      updateGameState(width, height, &snake, &food, curDirection, &score);
+    if (gameIsDone(width, height, snake)) {
+      continue;
     }
+    updateGameState(action, width, height, &paused, &snake, &food, &curDirection, &score);
   }
 
-  render(width, height, snake, food, paused, score);
   free(mem);
   endwin();
 }

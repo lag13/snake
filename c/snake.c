@@ -1,5 +1,8 @@
+// srand()
 // rand()
 #include <stdlib.h>
+// time()
+#include <time.h>
 
 #include "snake.h"
 
@@ -59,8 +62,51 @@ bool gameIsDone(int width, int height, posList snake) {
   return gameIsWon(width, height, snake) || gameIsLost(width, height, snake);
 }
 
-void updateGameState(int width, int height, posList* snake, pos* food, dir d, int* score) {
-  pos newHead = { .x = snake->list[snake->len-1].x + d.x, .y = snake->list[snake->len-1].y + d.y };
+static const dir NO_DIRECTION = { .x = 0, .y = 0 };
+
+dir actionToDirection(playeraction a) {
+  if (a == UP) {
+    return (dir){ .x = 0, .y = -1 };
+  }
+  if (a == DOWN) {
+    return (dir){ .x = 0, .y = 1 };
+  }
+  if (a == LEFT) {
+    return (dir){ .x = -1, .y = 0 };
+  }
+  if (a == RIGHT) {
+    return (dir){ .x = 1, .y = 0 };
+  }
+  return NO_DIRECTION;
+}
+
+void initState(int width, int height, posList *snake, pos *food, playeractionQueue *queue, dir *curDirection, bool *paused, int *score) {
+  srand(time(NULL));
+  snake->len = 4;
+  snake->list[0] = (pos){ .x = 0, .y = 1 };
+  snake->list[1] = (pos){ .x = 0, .y = 0 };
+  snake->list[2] = (pos){ .x = 1, .y = 0 };
+  snake->list[3] = (pos){ .x = 1, .y = 1 };
+  *food = createFood(width, height, *snake);
+  while (playeractionQueue_dequeue(queue) != NO_ACTION);
+  *curDirection = actionToDirection(DOWN);
+  *paused = false;
+  *score = 0;
+}
+
+void updateGameState(playeraction action, int width, int height, bool *paused, posList *snake, pos *food, dir *d, int *score) {
+  if (action == PAUSE) {
+    *paused = !(*paused);
+    return;
+  }
+  if (*paused) {
+    return;
+  }
+  dir newDir = actionToDirection(action);
+  if (!dir_equal(newDir, NO_DIRECTION)) {
+    *d = newDir;
+  }
+  pos newHead = { .x = snake->list[snake->len-1].x + d->x, .y = snake->list[snake->len-1].y + d->y };
   if (pos_equal(newHead, *food)) {
     *snake = posList_append(*snake, newHead);
     *food = createFood(width, height, *snake);
@@ -69,7 +115,7 @@ void updateGameState(int width, int height, posList* snake, pos* food, dir d, in
     for (int i = 0; i < snake->len-1; i++) {
       snake->list[i] = snake->list[i+1];
     }
-    snake->list[snake->len-1].x += d.x;
-    snake->list[snake->len-1].y += d.y;
+    snake->list[snake->len-1].x += d->x;
+    snake->list[snake->len-1].y += d->y;
   }
 }

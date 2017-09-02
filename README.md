@@ -65,7 +65,19 @@ To relate this to grammar:
 - parser - "stream of words" -> "stream of valid sentences"
 - evaluator - "stream of valid sentences" -> "meaning"
 
-### Kinds Of Input
+### Classification of Inputs
+It sort of feels like there are 2 "kinds" of inputs when dealing with
+a game:
+
+1. Inputs which are sort of "outside" the game. For example the
+   "on/off" and "reset" buttons on a nintendo 64. Starting/quitting
+   and restarting a game feel like the only possible inputs in this
+   category.
+2. Inputs that happen while the game is active. This includes "pause".
+
+Not super important but I just wanted to keep this in mind.
+
+### Different Ways of Inputting
 Wanted to jot down all the different "types" of input I could think of
 which a game could accept so I could start thinking about how you
 would handle these different scenarios:
