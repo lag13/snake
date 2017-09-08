@@ -3,8 +3,8 @@ all: run
 run: build
 	./a.out
 
-build: main.o stdlibutil.o pthreadutil.o pos.o dir.o snake.o playeraction.o
-	gcc -l ncurses main.o stdlibutil.o pthreadutil.o pos.o dir.o snake.o playeraction.o
+build: main.o stdlibutil.o pthreadutil.o pos.o dir.o snake.o
+	gcc -l ncurses main.o stdlibutil.o pthreadutil.o pos.o dir.o snake.o
 
 main.o: main.c
 	gcc -c -Wall main.c
@@ -23,9 +23,6 @@ dir.o: dir.c
 
 snake.o: snake.c
 	gcc -c -Wall snake.c
-
-playeraction.o: playeraction.c
-	gcc -c -Wall playeraction.c
 
 .PHONY: clean
 clean:

@@ -21,10 +21,7 @@
 // dir
 #include "dir.h"
 // playeractionQueue
-#include "playeraction.h"
-// gameIsDone()
-// updateGameState()
-// etc...
+// snake()
 #include "snake.h"
 
 void drawCharOnGrid(int x, int y, char c) {
@@ -87,7 +84,7 @@ void drawGameOverText(int height, bool wonGame) {
 // http://www.linuxmisc.com/9-unix-programmer/87e7383a80449bf7.htm
 pthread_mutex_t ncursesMu;
 
-void render(int width, int height, posList snake, pos food, bool paused, int score) {
+void render(int width, int height, posList snake, pos food, bool paused, int score, bool gameIsWon, bool gameIsLost) {
   pthread_mutex_lock(&ncursesMu);
   clear();
   drawGrid(width, height);
@@ -95,8 +92,8 @@ void render(int width, int height, posList snake, pos food, bool paused, int sco
   drawFood(food);
   drawPausedMsg(width, height, paused);
   drawScore(height, score);
-  if (gameIsDone(width, height, snake)) {
-    drawGameOverText(height, gameIsWon(width, height, snake));
+  if (gameIsWon || gameIsLost) {
+    drawGameOverText(height, gameIsWon);
   }
   // TODO: Display the controls. To do this we need to create a hash
   // table of char -> playeraction.
@@ -104,6 +101,8 @@ void render(int width, int height, posList snake, pos food, bool paused, int sco
   pthread_mutex_unlock(&ncursesMu);
 }
 
+// TODO: Pass this variable into the getInput function instead of
+// having it be a global variable.
 playeractionQueue *queue;
 
 void *getInput() {
@@ -143,12 +142,8 @@ void *getInput() {
 }
 
 int main(int argc, char** argv) {
-  int width, height;
-  posList snake;
-  pos food;
-  dir curDirection;
-  bool paused;
-  int score;
+  int width = 15;
+  int height = 15;
   // This points to all allocated memory used by this game. The
   // benefit of this is that memory is allocated and free'd only once.
   // This variable need not exist but I liked the idea of having a
@@ -159,55 +154,35 @@ int main(int argc, char** argv) {
   // how big the chunk is.
   void* mem;
 
-  width = 15, height = 15;
-  size_t snakeSpaceOccupies = width*height*sizeof(*snake.list);
-  mem = mustMalloc(snakeSpaceOccupies + PLAYERACTIONQUEUE_SPACEOCCUPIED);
-  snake.list = mem;
-  pthread_mutex_t mu;
-  must_pthread_mutex_init(&mu, NULL);
-  queue = &(playeractionQueue) { .arr = (mem+snakeSpaceOccupies), .mu = &mu };
-  initState(width, height, &snake, &food, queue, &curDirection, &paused, &score);
-  // initializes ncurses:
-  // http://www.tldp.org/HOWTO/NCURSES-Programming-HOWTO/
-  initscr();
-  // makes it so input is immediately sent to the program instead of
-  // waiting for a newline (oddly though when testing this wasn't
-  // necessary but I'm keeping it because that's what the docs say).
-  cbreak();
-  // prevents player input from appearing on screen
-  noecho();
-  // hides the cursor
-  curs_set(0);
-  // so calls to getch() do not block
-  timeout(0);
-  must_pthread_mutex_init(&ncursesMu, NULL);
-  pthread_t threadID;
-  must_pthread_create(&threadID, NULL, &getInput, NULL);
-
-  // TODO: I sort of feel like this entire game loop should be the
-  // only exposed function from the snake package. Should we go and do
-  // this?
-  struct timespec delay = {0, 100000000};
-  while (true) {
-    render(width, height, snake, food, paused, score);
-    nanosleep(&delay, NULL);
-    playeraction action = playeractionQueue_dequeue(queue);
-    while (!dir_orthogonal(curDirection, actionToDirection(action))) {
-      action = playeractionQueue_dequeue(queue);
-    }
-    if (action == QUIT) {
-      break;
-    }
-    if (action == NEW_GAME) {
-        initState(width, height, &snake, &food, queue, &curDirection, &paused, &score);
-	continue;
-    }
-    if (gameIsDone(width, height, snake)) {
-      continue;
-    }
-    updateGameState(action, width, height, &paused, &snake, &food, &curDirection, &score);
+  {
+    size_t snakeSpaceOccupies = snakeSpaceRequired(width, height);
+    mem = mustMalloc(snakeSpaceOccupies + PLAYERACTIONQUEUE_SPACEREQUIRED);
+    pthread_mutex_t mu;
+    must_pthread_mutex_init(&mu, NULL);
+    queue = &(playeractionQueue) { .arr = (mem+snakeSpaceOccupies), .mu = &mu };
   }
 
-  free(mem);
+  {
+    // initializes ncurses:
+    // http://www.tldp.org/HOWTO/NCURSES-Programming-HOWTO/
+    initscr();
+    // makes it so input is immediately sent to the program instead of
+    // waiting for a newline (oddly though when testing this wasn't
+    // necessary but I'm keeping it because that's what the docs say).
+    cbreak();
+    // prevents player input from appearing on screen
+    noecho();
+    // hides the cursor
+    curs_set(0);
+    // so calls to getch() do not block
+    timeout(0);
+    must_pthread_mutex_init(&ncursesMu, NULL);
+    pthread_t threadID;
+    must_pthread_create(&threadID, NULL, &getInput, NULL);
+  }
+
+  snake(width, height, mem, queue, render);
+
   endwin();
+  free(mem);
 }
