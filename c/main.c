@@ -1,3 +1,5 @@
+// TODO: Make a graphical version of this program.
+
 // initscr()
 // mvaddch()
 // etc...
@@ -20,15 +22,18 @@
 #include "pos.h"
 // dir
 #include "dir.h"
+// charactionPair
+// charactionMap
+#include "charactionmap.h"
 // playeractionQueue
 // snake()
 #include "snake.h"
 
 void drawCharOnGrid(int x, int y, char c) {
   // On my terminal doubling the width seems to makes the game look
-  // more proportional. I should look into how common this is (just
-  // for curiosity). Could you configure your terminal to be more
-  // proportional without needing to do something like this? Probably.
+  // more proportional. TODO: Could you configure your terminal to be
+  // more proportional without needing to do something like this?
+  // Probably.
   mvaddch(y, 2*x, c);
 }
 
@@ -78,31 +83,55 @@ void drawGameOverText(int height, bool wonGame) {
   mvprintw(height+1, 0, s);
 }
 
-// TODO: Read about threads and if I need to cancel this thread or if
-// it will stop automatically when main does I think it will stop
-// automatically. But I definitely want to learn more about
-// threads/processes and depending on that research I'd like to remove
-// these 2 global variables and instead pass them into the functions
-// that need them. I'll need to use a closure for the render function.
-// It would be cool if I could implement the equivalent of goroutines
-// in C. I wonder if that would be hard or if that would have benefits
-// in terms of memory and such (and how would I even measure those
-// sorts of things).
+void drawControls(int width, charactionMap controls) {
+  for (int y = 0; y < controls.len; y++) {
+    charactionPair pair = controls.map[y];
+    mvaddch(y, 2*width+1, pair.key);
+    mvaddch(y, 2*width+3, '-');
+    mvprintw(y, 2*width+5, playeraction_toString(pair.value));
+  }
+}
+
+// TODO: Learn more about threads. What I want to figure out is: 1.
+// Will the thread reading input stop automatically when main stops or
+// do I need to cancel it (I'm fairly certain it will stop when main
+// does). 2. I want to pass the playeractionQueue as an argument to
+// the function reading input rather than having it as a global
+// variable and I want to know if doing that is okay? I read somewhere
+// that it is *potentially* unsafe because the main thread (where the
+// queue was defined) could stop and then at the same time the thread
+// getting input could try to access that now non-existant variable
+// causing some sort of failure. 3. I want to learn more about how
+// goroutines are implemented and if I could implement something like
+// them in C. I wonder if that would be hard or if that would have
+// benefits in terms of memory and such (and how would I even measure
+// those sorts of things). 4. I briefly read about the library openMP
+// which, like pthreads, also allows for doing parallel things. I
+// would be interested in trying that out.
+
+// Links:
+// https://stackoverflow.com/questions/16230542/passing-multiple-arguments-to-threaded-function-from-pthread-create.
+// https://en.wikipedia.org/wiki/Thread_(computing)
+// https://computing.llnl.gov/tutorials/parallel_comp
+// https://computing.llnl.gov/tutorials/pthreads
+// https://computing.llnl.gov/tutorials/openMP
+// https://stackoverflow.com/questions/27789227/what-exactly-are-goroutines
+// https://dave.cheney.net/2014/06/07/five-things-that-make-go-fast
+// https://stackoverflow.com/questions/11875956/main-thread-exit-does-other-exit-too
+// https://stackoverflow.com/questions/19744250/what-happens-to-a-detached-thread-when-main-exits
+// https://stackoverflow.com/questions/16230542/passing-multiple-arguments-to-threaded-function-from-pthread-create
 
 // It turns out that ncurses is not thread safe so we need to have
 // this mutex to prevent multiple threads from executing nucurses
 // functions at the same time:
 // http://www.linuxmisc.com/9-unix-programmer/87e7383a80449bf7.htm
 pthread_mutex_t ncursesMu;
-// I wanted to make this variable local to main and pass it into the
-// getInput function but apparently that *could* lead to issues where:
-// 1. main terminates so any variables it declared are invalid 2.
-// *right* after main terminates, the thread is scheduled and since it
-// references this now invalid variable it would fail. I've never seen
-// this happen and for such a dinky program I d
-// https://stackoverflow.com/questions/16230542/passing-multiple-arguments-to-threaded-function-from-pthread-create.
-// https://en.wikipedia.org/wiki/Thread_(computing)
-playeractionQueue *queue;
+
+const uint8_t mapLen = 7;
+charactionMap controls = {
+  .len = mapLen,
+  .map = (charactionPair[mapLen]){{'w', UP}, {'s', DOWN}, {'a', LEFT}, {'d', RIGHT}, {'p', PAUSE}, {'q', QUIT}, {'n', NEW_GAME}}
+};
 
 void render(int width, int height, posList snake, pos food, bool paused, int score, bool gameIsWon, bool gameIsLost) {
   pthread_mutex_lock(&ncursesMu);
@@ -115,48 +144,23 @@ void render(int width, int height, posList snake, pos food, bool paused, int sco
   if (gameIsWon || gameIsLost) {
     drawGameOverText(height, gameIsWon);
   }
-  // TODO: Display the controls. To do this we'll need to create a
-  // hash table of char -> playeraction. I would also like to
-  // investigate how one could do interface like stuff in C as really
-  // this mapping should be something like (Show a) => a ->
-  // playeraction -> string. I'll put it in this file for now but I
-  // guess it should probably go inside the snake.h module.
+  drawControls(width, controls);
   refresh();
   pthread_mutex_unlock(&ncursesMu);
 }
 
+playeractionQueue *queue;
+
 void *getInput() {
+  bool exists;
+  playeraction action;
   while (1) {
     pthread_mutex_lock(&ncursesMu);
     char c = getch();
     pthread_mutex_unlock(&ncursesMu);
-    if (c == 'w') {
-      playeractionQueue_enqueue(queue, UP);
-      continue;
-    }
-    if (c == 's') {
-      playeractionQueue_enqueue(queue, DOWN);
-      continue;
-    }
-    if (c == 'a') {
-      playeractionQueue_enqueue(queue, LEFT);
-      continue;
-    }
-    if (c == 'd') {
-      playeractionQueue_enqueue(queue, RIGHT);
-      continue;
-    }
-    if (c == 'p') {
-      playeractionQueue_enqueue(queue, PAUSE);
-      continue;
-    }
-    if (c == 'q') {
-      playeractionQueue_enqueue(queue, QUIT);
-      continue;
-    }
-    if (c == 'n') {
-      playeractionQueue_enqueue(queue, NEW_GAME);
-      continue;
+    exists = charactionMap_getValue(controls, c, &action);
+    if (exists) {
+      playeractionQueue_enqueue(queue, action);
     }
   }
 }
@@ -182,7 +186,6 @@ int main(int argc, char** argv) {
     queue = &(playeractionQueue) { .arr = (mem+snakeSpaceOccupies), .mu = &mu };
   }
 
-  pthread_t threadID;
   {
     // initializes ncurses:
     // http://www.tldp.org/HOWTO/NCURSES-Programming-HOWTO/
@@ -201,14 +204,16 @@ int main(int argc, char** argv) {
     // functions from running.
     timeout(0);
     must_pthread_mutex_init(&ncursesMu, NULL);
+    pthread_t threadID;
     must_pthread_create(&threadID, NULL, &getInput, NULL);
   }
 
   snake(width, height, mem, queue, render);
-  /* pthread_join(threadID, NULL); */
-  // TODO: Maybe register some trap handler things if the user presses
-  // ctrl-c? I wonder if ncurses does this so that endwin() always
-  // gets closed.
+  // TODO: Should I register some Ctrl-c handlers and what not? I
+  // would imagine not in this case since if this program stops then
+  // the memory is going to be cleaned up anyway? I wonder if ncurses
+  // does this so that endwin() always gets closed because if it
+  // doesn't I think it messes up the terminal.
   endwin();
   free(mem);
   return 0;

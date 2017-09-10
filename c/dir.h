@@ -6,7 +6,8 @@
 // bool
 #include <stdbool.h>
 
-// A direction in 2D space.
+// A direction in 2D space. TODO: Make these uint8_t types instead of
+// char's.
 typedef struct {
   char x;
   char y;
