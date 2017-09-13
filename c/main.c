@@ -1,5 +1,9 @@
 // TODO: Make a graphical version of this program.
 
+// TODO: See what it would take to make this game also work if we got
+// input from something besides a keyboard (like a controller or
+// something like that).
+
 // initscr()
 // mvaddch()
 // etc...
@@ -12,6 +16,8 @@
 #include <stdlib.h>
 // pthread_t
 #include <pthread.h>
+// bool
+#include <stdbool.h>
 
 // mustMalloc()
 #include "stdlibutil.h"
@@ -29,43 +35,57 @@
 // snake()
 #include "snake.h"
 
-void drawCharOnGrid(int x, int y, char c) {
+int xToScreenMapping(int x) {
   // On my terminal doubling the width seems to makes the game look
   // more proportional. TODO: Could you configure your terminal to be
   // more proportional without needing to do something like this?
   // Probably.
-  mvaddch(y, 2*x, c);
+  return 2*x;
+}
+
+void drawCharOnGrid(int x, int y, int width, int height, char c) {
+  // On my terminal doubling the width seems to makes the game look
+  // more proportional. TODO: Could you configure your terminal to be
+  // more proportional without needing to do something like this?
+  // Probably.
+  if (x < 0 || width <= x) {
+    return;
+  }
+  if (y < 0 || height <= y) {
+    return;
+  }
+  mvaddch(y, xToScreenMapping(x), c);
 }
 
 void drawGrid(int width, int height) {
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
-      drawCharOnGrid(x, y, '.');
+      drawCharOnGrid(x, y, width, height, '.');
     }
   }
 }
 
-void drawStrOnGrid(int x, int y, char* s) {
+void drawStrOnGrid(int x, int y, int width, int height, char* s) {
   for (int i = 0; i < strlen(s); i++) {
-    drawCharOnGrid(x+i, y, s[i]);
+    drawCharOnGrid(x+i, y, width, height, s[i]);
   }
 }
 
-void drawSnake(posList snake) {
+void drawSnake(posList snake, int width, int height) {
   for (int i = 0; i < snake.len-1; i++) {
-    drawCharOnGrid(snake.list[i].x, snake.list[i].y, '#');
+    drawCharOnGrid(snake.list[i].x, snake.list[i].y, width, height, '#');
   }
-  drawCharOnGrid(snake.list[snake.len-1].x, snake.list[snake.len-1].y, '@');
+  drawCharOnGrid(snake.list[snake.len-1].x, snake.list[snake.len-1].y, width, height, '@');
 }
 
-void drawFood(pos food) {
-  drawCharOnGrid(food.x, food.y, '*');
+void drawFood(pos food, int width, int height) {
+  drawCharOnGrid(food.x, food.y, width, height, '*');
 }
 
 void drawPausedMsg(int width, int height, bool paused) {
   if (paused) {
     char* pauseMsg = "[Paused]";
-    drawStrOnGrid(width/2 - strlen(pauseMsg)/2, height/2, pauseMsg);
+    drawStrOnGrid(width/2 - strlen(pauseMsg)/2, height/2, width, height, pauseMsg);
   }
 }
 
@@ -86,9 +106,9 @@ void drawGameOverText(int height, bool wonGame) {
 void drawControls(int width, charactionMap controls) {
   for (int y = 0; y < controls.len; y++) {
     charactionPair pair = controls.map[y];
-    mvaddch(y, 2*width+1, pair.key);
-    mvaddch(y, 2*width+3, '-');
-    mvprintw(y, 2*width+5, playeraction_toString(pair.value));
+    mvaddch(y, xToScreenMapping(width), pair.key);
+    mvaddch(y, xToScreenMapping(width+1), '-');
+    mvprintw(y, xToScreenMapping(width+2), playeraction_toString(pair.value));
   }
 }
 
@@ -127,30 +147,38 @@ void drawControls(int width, charactionMap controls) {
 // http://www.linuxmisc.com/9-unix-programmer/87e7383a80449bf7.htm
 pthread_mutex_t ncursesMu;
 
-const uint8_t mapLen = 7;
+// All the controls in the game of snake.
 charactionMap controls = {
-  .len = mapLen,
-  .map = (charactionPair[mapLen]){{'w', UP}, {'s', DOWN}, {'a', LEFT}, {'d', RIGHT}, {'p', PAUSE}, {'q', QUIT}, {'n', NEW_GAME}}
+  .len = 7,
+  .map = (charactionPair[]){{'w', UP}, {'s', DOWN}, {'a', LEFT}, {'d', RIGHT}, {'p', PAUSE}, {'q', QUIT}, {'n', NEW_GAME}}
 };
 
+// Draws the game.
 void render(int width, int height, posList snake, pos food, bool paused, int score, bool gameIsWon, bool gameIsLost) {
   pthread_mutex_lock(&ncursesMu);
+  // TODO: I don't *really* need to clear the whole screen and redraw
+  // everything since the only thing that changes is the snake, score,
+  // and food. Perhaps work on removing this? I occassionally see a
+  // flicker on the screen and maybe that is caused by this repeated
+  // clear'ing.
   clear();
   drawGrid(width, height);
-  drawSnake(snake);
-  drawFood(food);
+  drawSnake(snake, width, height);
+  drawFood(food, width, height);
   drawPausedMsg(width, height, paused);
   drawScore(height, score);
+  drawControls(width, controls);
   if (gameIsWon || gameIsLost) {
     drawGameOverText(height, gameIsWon);
   }
-  drawControls(width, controls);
   refresh();
   pthread_mutex_unlock(&ncursesMu);
 }
 
 playeractionQueue *queue;
 
+// Gets input from ncurses and adds them to the queue of player
+// actions.
 void *getInput() {
   bool exists;
   playeraction action;
@@ -165,25 +193,31 @@ void *getInput() {
   }
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
+  // TODO: If the game is ever "too small" then it looks wrong.
+  // Similarly if its too big for the terminal then you can't see
+  // everything. Should we try to check that the specified width and
+  // height "make sense"?
   int width = 15;
   int height = 15;
-  // This points to all allocated memory used by this game. The
-  // benefit of this is that memory is allocated and free'd only once.
-  // This variable need not exist but I liked the idea of having a
-  // "memory bookeeping" sort of variable which is independent of any
-  // particular application. TODO: This game is so small that it
-  // really doesn't matter but is it bad practice to allocate one
-  // giant contiguous chunk of memory? I guess it probably depends on
-  // how big the chunk is.
+  // This points to all dynamic allocated memory used by this game.
+  // The benefit of this is that memory is allocated and free'd only
+  // once. This variable need not exist but I liked the idea of having
+  // one single "memory bookeeping" sort of variable which is
+  // independent of any particular application. In fact I don't think
+  // this application even needs dynamically allocated memory but I
+  // kept it around since I want to remember this "pattern". TODO:
+  // This game is so small that it really doesn't matter but is it bad
+  // practice to allocate one giant contiguous chunk of memory? I
+  // guess it probably depends on how big the chunk is.
   void* mem;
 
   {
     size_t snakeSpaceOccupies = snakeSpaceRequired(width, height);
-    mem = mustMalloc(snakeSpaceOccupies + PLAYERACTIONQUEUE_SPACEREQUIRED);
+    mem = mustMalloc(snakeSpaceOccupies);
     pthread_mutex_t mu;
     must_pthread_mutex_init(&mu, NULL);
-    queue = &(playeractionQueue) { .arr = (mem+snakeSpaceOccupies), .mu = &mu };
+    queue = &(playeractionQueue) { .mu = &mu };
   }
 
   {
@@ -208,12 +242,16 @@ int main(int argc, char** argv) {
     must_pthread_create(&threadID, NULL, &getInput, NULL);
   }
 
-  snake(width, height, mem, queue, render);
+  // 0.1 seconds
+  struct timespec frameRate = {.tv_sec = 0, .tv_nsec = 100000000};
+  snake(width, height, frameRate, mem, queue, render);
   // TODO: Should I register some Ctrl-c handlers and what not? I
   // would imagine not in this case since if this program stops then
-  // the memory is going to be cleaned up anyway? I wonder if ncurses
-  // does this so that endwin() always gets closed because if it
-  // doesn't I think it messes up the terminal.
+  // the memory is going to be cleaned up anyway? I feel like the only
+  // time you need to register Ctrl-c handlers is if you are talking
+  // to some other program and you don't want to leave them hanging. I
+  // wonder if ncurses does this so that endwin() always gets closed
+  // because if it doesn't I think it messes up the terminal.
   endwin();
   free(mem);
   return 0;

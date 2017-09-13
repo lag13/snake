@@ -1,3 +1,9 @@
+# TODO: What are the best practices for compiling C programs while
+# developing? Is it a Makefile? Speaking of which, there is a LOT of
+# repetition in this Makefile, can I cut that down somehow? Also, this
+# Makefile is not perfect because I keep struct definitions in my
+# header files so if those change then the corresponding .c file
+# should be recompiled.
 all: run
 
 run: build

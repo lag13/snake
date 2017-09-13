@@ -5,12 +5,13 @@
 
 // bool
 #include <stdbool.h>
+// uint8_t
+#include <stdint.h>
 
-// A direction in 2D space. TODO: Make these uint8_t types instead of
-// char's.
+// A direction in 2D space.
 typedef struct {
-  char x;
-  char y;
+  uint8_t x;
+  uint8_t y;
 } dir;
 
 // Returns true if two directions are equal.

@@ -10,12 +10,16 @@
 #include <pthread.h>
 // size_t
 #include <stddef.h>
+// struct timespec
+#include <time.h>
 
 // pos
 // posList
 #include "pos.h"
 // dir
 #include "dir.h"
+
+#define PLAYERACTIONQUEUE_SIZE 8
 
 // These are the possible actions a player can take in the game of
 // snake.
@@ -52,16 +56,9 @@ typedef struct {
   uint8_t head: 3;
   uint8_t tail: 3;
   uint8_t isFull: 1;
-  // This pointer MUST point to an array with exactly 8 slots in it
-  // otherwise this queue does not work.
-  playeraction *arr;
+  playeraction arr[PLAYERACTIONQUEUE_SIZE];
   pthread_mutex_t *mu;
 } playeractionQueue;
-
-// How much space the backing array for the queue occupies. This is
-// here for convenience so callers can more easily allocate the memory
-// needed for the backing array for this queue.
-extern const size_t PLAYERACTIONQUEUE_SPACEREQUIRED;
 
 // Adds an item to the queue. If there is no more room on the queue
 // then the it is discarded. This "lossy" behavior seems fine since
@@ -78,6 +75,6 @@ size_t snakeSpaceRequired(int width, int height);
 // the function pointer "funcPtr" can point to a function which
 // returns a "char" and takes an "int" as a parameter. It's very messy
 // to look at for sure.
-void snake(int width, int height, void *snakeMem, playeractionQueue *actionsQueue, void (*render)(int width, int height, posList snake, pos food, bool paused, int score, bool gameIsWon, bool gameIsLost));
+void snake(int width, int height, struct timespec frameRate, void *snakeMem, playeractionQueue *actionsQueue, void (*render)(int width, int height, posList snake, pos food, bool paused, int score, bool gameIsWon, bool gameIsLost));
 
 #endif	/* SNAKE_H */

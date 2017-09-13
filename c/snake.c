@@ -7,8 +7,6 @@
 
 #include "snake.h"
 
-static const char queueSize = 8;
-
 static playeraction playeractionQueue_dequeue(playeractionQueue *q) {
   // if the head and tail point to the same place then the queue is
   // either full or empty.
@@ -17,7 +15,7 @@ static playeraction playeractionQueue_dequeue(playeractionQueue *q) {
   }
   pthread_mutex_lock(q->mu);
   playeraction elem = q->arr[q->head];
-  q->head = (q->head+1) % queueSize;
+  q->head = (q->head+1) % PLAYERACTIONQUEUE_SIZE;
   q->isFull = 0;
   pthread_mutex_unlock(q->mu);
   return elem;
@@ -133,8 +131,6 @@ static void updateGameState(playeraction action, int width, int height, bool *pa
   }
 }
 
-const size_t PLAYERACTIONQUEUE_SPACEREQUIRED = sizeof(sizeof(playeraction) * queueSize);
-
 char *playeraction_toString(playeraction p) {
   switch (p) {
   case NO_ACTION:
@@ -148,7 +144,7 @@ char *playeraction_toString(playeraction p) {
   case RIGHT:
     return "move the snake right";
   case PAUSE:
-    return "paused the game";
+    return "pause the game";
   case QUIT:
     return "quit the game";
   case NEW_GAME:
@@ -164,7 +160,7 @@ void playeractionQueue_enqueue(playeractionQueue *q, playeraction c) {
   }
   pthread_mutex_lock(q->mu);
   q->arr[q->tail] = c;
-  q->tail = (q->tail+1) % queueSize;
+  q->tail = (q->tail+1) % PLAYERACTIONQUEUE_SIZE;
   if (q->tail == q->head) {
     q->isFull = 1;
   }
@@ -176,7 +172,7 @@ size_t snakeSpaceRequired(int width, int height) {
   return width * height * sizeof(*snake.list);
 }
 
-void snake(int width, int height, void *snakeMem, playeractionQueue *actionsQueue, void (*render)(int width, int height, posList snake, pos food, bool paused, int score, bool gameIsWon, bool gameIsLost)) {
+void snake(int width, int height, struct timespec frameRate, void *snakeMem, playeractionQueue *actionsQueue, void (*render)(int width, int height, posList snake, pos food, bool paused, int score, bool gameIsWon, bool gameIsLost)) {
   posList snake;
   pos food;
   dir curDirection;
@@ -187,12 +183,11 @@ void snake(int width, int height, void *snakeMem, playeractionQueue *actionsQueu
   
   initState(width, height, &snake, &food, actionsQueue, &curDirection, &paused, &score);
 
-  struct timespec delay = {0, 100000000};
   while (true) {
     bool won = gameIsWon(width, height, snake);
     bool lost = gameIsLost(width, height, snake);
     render(width, height, snake, food, paused, score, won, lost);
-    nanosleep(&delay, NULL);
+    nanosleep(&frameRate, NULL);
     playeraction action = playeractionQueue_dequeue(actionsQueue);
     while (!dir_orthogonal(curDirection, actionToDirection(action))) {
       action = playeractionQueue_dequeue(actionsQueue);

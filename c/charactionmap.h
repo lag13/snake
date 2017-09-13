@@ -17,6 +17,7 @@
 
 // This is map is really just a list of key+value pairs and this is
 // the definition of those pairs.
+
 typedef struct {
   char key;
   playeraction value;
@@ -27,11 +28,6 @@ typedef struct {
   uint8_t len;
   charactionPair *map;
 } charactionMap;
-
-// Returns how much memory is required for the map. It is a
-// convenience so callers can more easily allocate the necessary
-// amount of memory.
-size_t charactionMap_spaceRequired(int length);
 
 // If the key exists in the map this function returns true and the
 // value will be filled in. Otherwise it returns false.
