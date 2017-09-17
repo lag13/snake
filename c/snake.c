@@ -1,160 +1,207 @@
-#include <ncurses.h>
-#include <time.h>
+// srand()
+// rand()
+// exit()
 #include <stdlib.h>
-#include <string.h>
-#include "util.h"
+// time()
+#include <time.h>
 
-// drawCharOnGrid draws a character on the game grid.
-void drawCharOnGrid(int x, int y, char c) {
-  // On my terminal, doubling the width makes the game more
-  // proportional
-  mvaddch(y, 2*x, c);
+#include "snake.h"
+
+static playeraction playeractionQueue_dequeue(playeractionQueue *q) {
+  // if the head and tail point to the same place then the queue is
+  // either full or empty.
+  if (q->head == q->tail && !q->isFull) {
+    return NO_ACTION;
+  }
+  pthread_mutex_lock(q->mu);
+  playeraction elem = q->arr[q->head];
+  q->head = (q->head+1) % PLAYERACTIONQUEUE_SIZE;
+  q->isFull = 0;
+  pthread_mutex_unlock(q->mu);
+  return elem;
 }
 
-void drawGrid(int width, int height) {
+static pos createFood(int width, int height, posList snake) {
+  // The high level view of how this code works: (1) Creates a list of
+  // open positions (i.e positions not occuipied by the snake) and (2)
+  // grabs a random element from that list. But it does this without
+  // creating a list of open positions.
+  int maxRand = width*height - snake.len;
+  if (maxRand <= 0) {
+    return (pos){ .x = -1, .y = -1 };
+  }
+  int randIndex = rand() % maxRand;
+  int curRandIndex = 0;
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
-      drawCharOnGrid(x, y, '.');
+      pos p = { .x = x, .y = y };
+      if (posList_contains(snake, p)) {
+	continue;
+      }
+      if (curRandIndex == randIndex) {
+	return p;
+      }
+      curRandIndex++;
     }
   }
+  // This should never be reached but I added it to get rid of the
+  // compiler warning.
+  return (pos){ .x = -1, .y = -1 };
 }
 
-void drawSnake(posList snake) {
-  for (int i = 0; i < snake.len-1; i++) {
-    drawCharOnGrid(snake.list[i].x, snake.list[i].y, '#');
+static const dir NO_DIRECTION = { .x = 0, .y = 0 };
+
+static dir actionToDirection(playeraction a) {
+  if (a == UP) {
+    return (dir){ .x = 0, .y = -1 };
   }
-  drawCharOnGrid(snake.list[snake.len-1].x, snake.list[snake.len-1].y, '@');
-}
-
-void drawFood(pos food) {
-  drawCharOnGrid(food.x, food.y, '*');
-}
-
-void drawStrOnGrid(int x, int y, char* s) {
-  for (int i = 0; i < strlen(s); i++) {
-    drawCharOnGrid(x+i, y, s[i]);
+  if (a == DOWN) {
+    return (dir){ .x = 0, .y = 1 };
   }
-}
-
-void drawPausedMsg(int width, int height, bool paused) {
-  if (paused) {
-    char* pauseMsg = "[Paused]";
-    drawStrOnGrid(width/2 - strlen(pauseMsg)/2, height/2, pauseMsg);
+  if (a == LEFT) {
+    return (dir){ .x = -1, .y = 0 };
   }
+  if (a == RIGHT) {
+    return (dir){ .x = 1, .y = 0 };
+  }
+  return NO_DIRECTION;
 }
 
-void drawScore(int height, int score) {
-  mvprintw(height, 0, "Score: %d", score);
+static void initState(int width, int height, posList *snake, pos *food, playeractionQueue *queue, dir *curDirection, bool *paused, int *score) {
+  srand(time(NULL));
+  snake->len = 4;
+  snake->list[0] = (pos){ .x = 0, .y = 1 };
+  snake->list[1] = (pos){ .x = 0, .y = 0 };
+  snake->list[2] = (pos){ .x = 1, .y = 0 };
+  snake->list[3] = (pos){ .x = 1, .y = 1 };
+  *food = createFood(width, height, *snake);
+  while (playeractionQueue_dequeue(queue) != NO_ACTION);
+  *curDirection = actionToDirection(DOWN);
+  *paused = false;
+  *score = 0;
 }
 
-void drawGameOverText(int height, bool wonGame) {
-  char* s;
-  if (wonGame) {
-    s = "Holy shit you won!!";
+static bool gameIsWon(int width, int height, posList snake) {
+  return width*height == snake.len;
+}
+
+static bool gameIsLost(int width, int height, posList snake) {
+  {
+    posList headless = snake;
+    headless.len--;
+    if (posList_contains(headless, snake.list[snake.len-1])) {
+      return true;
+    }
+  }
+  {
+    pos head = snake.list[snake.len-1];
+    if (head.x < 0 || width <= head.x) {
+      return true;
+    }
+    if (head.y < 0 || height <= head.y) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void updateGameState(playeraction action, int width, int height, bool *paused, posList *snake, pos *food, dir *d, int *score) {
+  if (action == PAUSE) {
+    *paused = !(*paused);
+    return;
+  }
+  if (*paused) {
+    return;
+  }
+  dir newDir = actionToDirection(action);
+  if (!dir_equal(newDir, NO_DIRECTION)) {
+    *d = newDir;
+  }
+  pos newHead = { .x = snake->list[snake->len-1].x + d->x, .y = snake->list[snake->len-1].y + d->y };
+  if (pos_equal(newHead, *food)) {
+    *snake = posList_append(*snake, newHead);
+    *food = createFood(width, height, *snake);
+    (*score)++;
   } else {
-    s = "You lost. Then again one usually \"loses\" at snake";
+    for (int i = 0; i < snake->len-1; i++) {
+      snake->list[i] = snake->list[i+1];
+    }
+    snake->list[snake->len-1].x += d->x;
+    snake->list[snake->len-1].y += d->y;
   }
-  mvprintw(height+1, 0, s);
 }
 
-void render(int width, int height, posList snake, pos food, bool paused, int score) {
-  drawGrid(width, height);
-  drawSnake(snake);
-  drawFood(food);
-  drawPausedMsg(width, height, paused);
-  drawScore(height, score);
-  if (gameIsOver(width, height, snake)) {
-    drawGameOverText(height, gameIsWon(width, height, snake));
+char *playeraction_toString(playeraction p) {
+  switch (p) {
+  case NO_ACTION:
+    return "no action";
+  case UP:
+    return "move the snake up";
+  case DOWN:
+    return "move the snake down";
+  case LEFT:
+    return "move the snake left";
+  case RIGHT:
+    return "move the snake right";
+  case PAUSE:
+    return "pause the game";
+  case QUIT:
+    return "quit the game";
+  case NEW_GAME:
+    return "start a new game";
+  default:
+    return "BUG!!! Unknown player action, please add another case to the switch statement";
   }
-  refresh();
 }
 
-dir getInput(dir curDirection) {
-  char c;
-  // When there is no delay to recieve characters, ERR indicates that
-  // no input was recieved.
-  while ((c = getch()) != ERR) {
-    if (c == 'w' && !dir_equal(curDirection, DOWN)) {
-      return UP;
-    }
-    if (c == 's' && !dir_equal(curDirection, UP)) {
-      return DOWN;
-    }
-    if (c == 'a' && !dir_equal(curDirection, RIGHT)) {
-      return LEFT;
-    }
-    if (c == 'd' && !dir_equal(curDirection, LEFT)) {
-      return RIGHT;
-    }
-    if (c == 'p') {
-      return PAUSED;
-    }
+void playeractionQueue_enqueue(playeractionQueue *q, playeraction c) {
+  if (q->isFull) {
+    return;
   }
-  return curDirection;
+  pthread_mutex_lock(q->mu);
+  q->arr[q->tail] = c;
+  q->tail = (q->tail+1) % PLAYERACTIONQUEUE_SIZE;
+  if (q->tail == q->head) {
+    q->isFull = 1;
+  }
+  pthread_mutex_unlock(q->mu);
 }
 
-int main(int argc, char** argv) {
-  int width, height;
+size_t snakeSpaceRequired(int width, int height) {
+  posList snake;
+  return width * height * sizeof(*snake.list);
+}
+
+void snake(int width, int height, struct timespec frameRate, void *snakeMem, playeractionQueue *actionsQueue, void (*render)(int width, int height, posList snake, pos food, bool paused, int score, bool gameIsWon, bool gameIsLost)) {
   posList snake;
   pos food;
   dir curDirection;
   bool paused;
   int score;
-  // This points to all allocated memory used by this game. The
-  // benefit of this is that memory is allocated and free'd only once.
-  // This variable need not exist but I liked the idea of having a
-  // "memory bookeeping" sort of variable which is independent of any
-  // particular application.
-  void* mem;
 
-  // initializes ncurses:
-  // http://www.tldp.org/HOWTO/NCURSES-Programming-HOWTO/
-  initscr();
-  // makes it so input is immediately sent to the program instead of
-  // waiting for a newline (although when testing this wasn't
-  // necessary)
-  cbreak();
-  // prevents input from appearing on screen
-  noecho();
-  // hides the cursor
-  curs_set(0);
-  // so calls to getch() do not block
-  timeout(0);
-  srand(time(NULL));
-  width = 15, height = 15;
-  curDirection = DOWN;
-  paused = false;
-  score = 0;
-  mem = mustMalloc(width*height*sizeof(*snake.list));
-  snake.len = 4;
-  snake.list = mem;
-  snake.list[0] = (pos){ .x = 0, .y = 1 };
-  snake.list[1] = (pos){ .x = 0, .y = 0 };
-  snake.list[2] = (pos){ .x = 1, .y = 0 };
-  snake.list[3] = (pos){ .x = 1, .y = 1 };
-  food = createFood(width, height, snake);
+  snake.list = snakeMem;
+  
+  initState(width, height, &snake, &food, actionsQueue, &curDirection, &paused, &score);
 
-  struct timespec delay = {0, 100000000};
-  while (!gameIsOver(width, height, snake)) {
-    render(width, height, snake, food, paused, score);
-    nanosleep(&delay, NULL);
-    dir d = getInput(curDirection);
-    if (dir_equal(d, PAUSED)) {
-      paused = !paused;
-    } else {
-      curDirection = d;
+  while (true) {
+    bool won = gameIsWon(width, height, snake);
+    bool lost = gameIsLost(width, height, snake);
+    render(width, height, snake, food, paused, score, won, lost);
+    nanosleep(&frameRate, NULL);
+    playeraction action = playeractionQueue_dequeue(actionsQueue);
+    while (!dir_orthogonal(curDirection, actionToDirection(action))) {
+      action = playeractionQueue_dequeue(actionsQueue);
     }
-    if (!paused) {
-      updateGameState(width, height, &snake, &food, curDirection, &score);
+    if (action == QUIT) {
+      break;
     }
+    if (action == NEW_GAME) {
+        initState(width, height, &snake, &food, actionsQueue, &curDirection, &paused, &score);
+	continue;
+    }
+    if (won || lost) {
+      continue;
+    }
+    updateGameState(action, width, height, &paused, &snake, &food, &curDirection, &score);
   }
-
-  render(width, height, snake, food, paused, score);
-  // Eat unused input
-  while(getch() != ERR);
-  // Wait for the user to hit a key before quitting.
-  timeout(-1);
-  getch();
-  endwin();
-  free(mem);
 }
