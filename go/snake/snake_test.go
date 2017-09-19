@@ -1,121 +1,155 @@
-package snake
+package snake_test
 
 import (
+	"fmt"
+	"math/rand"
 	"reflect"
 	"testing"
 
-	"github.com/lag13/snake/Go/controller"
-	"github.com/lag13/snake/Go/model"
+	"github.com/lag13/snake/go/snake"
 )
 
-type mockGameInput struct {
-	inputIndex int
-	inputs     []int
-}
-
-func (mgi *mockGameInput) GetInput() int {
-	if mgi.inputIndex == len(mgi.inputs) {
-		return mgi.inputs[len(mgi.inputs)-1]
-	}
-	mgi.inputIndex++
-	return mgi.inputs[mgi.inputIndex-1]
-}
-
 type mockRenderer struct {
-	gameStates []model.GameState
+	gameStates []snake.GameState
 }
 
-func (mr *mockRenderer) Render(gs model.GameState) {
-	mr.gameStates = append(mr.gameStates, gs)
+func (m *mockRenderer) Render(g snake.GameState) {
+	copySnake := make([]snake.Point, len(g.Snake))
+	copy(copySnake, g.Snake)
+	copyG := g
+	copyG.Snake = copySnake
+	m.gameStates = append(m.gameStates, copyG)
 }
 
-type mockFoodGenerator struct {
-	foodIndex     int
-	foodPositions []model.Pt
-}
-
-func (mfg *mockFoodGenerator) GenerateFood(height int, width int, snake []model.Pt) model.Pt {
-	if len(mfg.foodPositions) == 0 {
-		return model.Pt{-1, -1}
-	}
-	if mfg.foodIndex == len(mfg.foodPositions) {
-		return model.Pt{-1, -1}
-	}
-	mfg.foodIndex++
-	return mfg.foodPositions[mfg.foodIndex-1]
-}
-
-// TestPlay is basically an E2E test (I think) of this game with controlled
-// inputs/generated food positions etc...
+// TestPlay tests that the game of snake goes through the expected
+// states given certain inputs. It is sort of like an acceptance test
+// (although it is not very end to end because we're not interacting
+// with the program from the outside world). TODO: These tests aren't
+// really practical because its not easy to control the channel of
+// inputs to effect the game and if that channel doesn't end in a Quit
+// then the test will loop forever. I wonder if that "quitting" and
+// "restarting" logic should go into a separate package? Or just a
+// better way to structure things? These tests are so difficult that
+// I'm stopping writing them.
 func TestPlay(t *testing.T) {
-	const (
-		height = 4
-		width  = 4
-	)
 	tests := []struct {
-		renderer        *mockRenderer
-		gameInput       *mockGameInput
-		foodGenerator   *mockFoodGenerator
-		wantSnakeStates [][]model.Pt
+		testScenario         string
+		width                int
+		height               int
+		rngSrc               rand.Source
+		renderer             *mockRenderer
+		playerActions        chan snake.PlayerAction
+		initialPlayerActions []snake.PlayerAction
+		wantGameStates       []snake.GameState
 	}{
 		{
-			&mockRenderer{},
-			&mockGameInput{0, []int{controller.Down, controller.Right, controller.Right, controller.Up, controller.Up, controller.Left, controller.Down, controller.Down, controller.Up, controller.Right, controller.Up, controller.Down, controller.Up, controller.Left}},
-			&mockFoodGenerator{0, []model.Pt{{1, 2}, {2, 2}, {2, 3}, {3, 3}, {1, 0}}},
-			[][]model.Pt{ // Test snake runs around for a while then dies running into a wall
-				[]model.Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]model.Pt{{1, 2}, {1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]model.Pt{{2, 2}, {1, 2}, {1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]model.Pt{{3, 2}, {2, 2}, {1, 2}, {1, 1}, {1, 0}, {0, 0}},
-				[]model.Pt{{3, 1}, {3, 2}, {2, 2}, {1, 2}, {1, 1}, {1, 0}},
-				[]model.Pt{{3, 0}, {3, 1}, {3, 2}, {2, 2}, {1, 2}, {1, 1}},
-				[]model.Pt{{2, 0}, {3, 0}, {3, 1}, {3, 2}, {2, 2}, {1, 2}},
-				[]model.Pt{{2, 1}, {2, 0}, {3, 0}, {3, 1}, {3, 2}, {2, 2}},
-				[]model.Pt{{2, 2}, {2, 1}, {2, 0}, {3, 0}, {3, 1}, {3, 2}},
-				[]model.Pt{{2, 3}, {2, 2}, {2, 1}, {2, 0}, {3, 0}, {3, 1}, {3, 2}},
-				[]model.Pt{{3, 3}, {2, 3}, {2, 2}, {2, 1}, {2, 0}, {3, 0}, {3, 1}, {3, 2}},
-				[]model.Pt{{3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}, {2, 0}, {3, 0}, {3, 1}},
-				[]model.Pt{{3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}, {2, 0}, {3, 0}},
-				[]model.Pt{{3, 0}, {3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}, {2, 0}},
-				[]model.Pt{{2, 0}, {3, 0}, {3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}},
-				[]model.Pt{{1, 0}, {2, 0}, {3, 0}, {3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}, {2, 1}},
-				[]model.Pt{{0, 0}, {1, 0}, {2, 0}, {3, 0}, {3, 1}, {3, 2}, {3, 3}, {2, 3}, {2, 2}},
+			testScenario:         "The game terminates immediately (in a victory!) since the board is the size of the snake and the player chooses to quit",
+			width:                2,
+			height:               2,
+			rngSrc:               rand.NewSource(0),
+			renderer:             &mockRenderer{[]snake.GameState{}},
+			playerActions:        make(chan snake.PlayerAction, 16),
+			initialPlayerActions: []snake.PlayerAction{},
+			wantGameStates: []snake.GameState{
+				{
+					Width:  2,
+					Height: 2,
+					Snake: []snake.Point{
+						{X: 0, Y: 1},
+						{X: 0, Y: 0},
+						{X: 1, Y: 0},
+						{X: 1, Y: 1},
+					},
+					Food:       snake.Point{X: -1, Y: -1},
+					Paused:     false,
+					Score:      0,
+					GameIsWon:  true,
+					GameIsLost: false,
+				},
 			},
 		},
-		{ // Test snake dies by running into itself
-			&mockRenderer{},
-			&mockGameInput{0, []int{controller.Down, controller.Right, controller.Up, controller.Left}},
-			&mockFoodGenerator{0, []model.Pt{{1, 2}}},
-			[][]model.Pt{
-				[]model.Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]model.Pt{{1, 2}, {1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]model.Pt{{2, 2}, {1, 2}, {1, 1}, {1, 0}, {0, 0}},
-				[]model.Pt{{2, 1}, {2, 2}, {1, 2}, {1, 1}, {1, 0}},
-			},
-		},
-		{ // Test that quitting exits the game
-			&mockRenderer{},
-			&mockGameInput{0, []int{controller.Down, controller.Quit, controller.Up, controller.Left}},
-			&mockFoodGenerator{0, []model.Pt{{1, 2}}},
-			[][]model.Pt{
-				[]model.Pt{{1, 1}, {1, 0}, {0, 0}, {0, 1}},
-				[]model.Pt{{1, 2}, {1, 1}, {1, 0}, {0, 0}, {0, 1}},
+		{
+			testScenario:         "The snake eats food and gets longer",
+			width:                3,
+			height:               3,
+			rngSrc:               rand.NewSource(0),
+			renderer:             &mockRenderer{[]snake.GameState{}},
+			playerActions:        make(chan snake.PlayerAction, 16),
+			initialPlayerActions: []snake.PlayerAction{snake.Right, snake.Down},
+			wantGameStates: []snake.GameState{
+				{
+					Width:  3,
+					Height: 3,
+					Snake: []snake.Point{
+						{X: 0, Y: 1},
+						{X: 0, Y: 0},
+						{X: 1, Y: 0},
+						{X: 1, Y: 1},
+					},
+					Food:       snake.Point{X: 2, Y: 2},
+					Paused:     false,
+					Score:      0,
+					GameIsWon:  false,
+					GameIsLost: false,
+				},
+				{
+					Width:  3,
+					Height: 3,
+					Snake: []snake.Point{
+						{X: 0, Y: 0},
+						{X: 1, Y: 0},
+						{X: 1, Y: 1},
+						{X: 2, Y: 1},
+					},
+					Food:       snake.Point{X: 2, Y: 2},
+					Paused:     false,
+					Score:      0,
+					GameIsWon:  false,
+					GameIsLost: false,
+				},
+				{
+					Width:  3,
+					Height: 3,
+					Snake: []snake.Point{
+						{X: 0, Y: 0},
+						{X: 1, Y: 0},
+						{X: 1, Y: 1},
+						{X: 2, Y: 1},
+						{X: 2, Y: 2},
+					},
+					Food:       snake.Point{X: 0, Y: 2},
+					Paused:     false,
+					Score:      0,
+					GameIsWon:  false,
+					GameIsLost: false,
+				},
 			},
 		},
 	}
-	for _, test := range tests {
-		gameState := model.New(height, width)
-		gameState.FoodGen = test.foodGenerator
-		gameState.Food = test.foodGenerator.GenerateFood(gameState.Height, gameState.Width, gameState.Snake)
-		Play(gameState, test.renderer, test.gameInput, 0)
-		if len(test.wantSnakeStates) != len(test.renderer.gameStates) {
-			t.Errorf("got %d iterations of the game loop, want %d", len(test.renderer.gameStates), len(test.wantSnakeStates))
-		} else {
-			for i, snakeState := range test.wantSnakeStates {
-				if !reflect.DeepEqual(snakeState, test.renderer.gameStates[i].Snake) {
-					t.Errorf("after %d game loop iterations got snake %v, want %v", i, test.renderer.gameStates[i].Snake, snakeState)
-				}
-			}
+	for i, test := range tests {
+		errorMsg := func(str string, args ...interface{}) {
+			t.Helper()
+			t.Errorf("Running test %d, where %s:\n"+str, append([]interface{}{i, test.testScenario}, args...)...)
+		}
+		for _, playerAction := range test.initialPlayerActions {
+			test.playerActions <- playerAction
+		}
+		test.playerActions <- snake.Quit
+		snake.Play(test.width, test.height, test.rngSrc, test.renderer, test.playerActions, 0)
+		if errMsg := gotExpectedGameStates(test.renderer.gameStates, test.wantGameStates); errMsg != "" {
+			errorMsg(errMsg)
 		}
 	}
+}
+
+func gotExpectedGameStates(gotGameStates []snake.GameState, wantGameStates []snake.GameState) string {
+	if got, want := len(gotGameStates), len(wantGameStates); got != want {
+		return fmt.Sprintf("%d game state(s) were rendered, should have rendered %d game state(s)", got, want)
+	}
+	for i := range gotGameStates {
+		if got, want := gotGameStates[i], wantGameStates[i]; !reflect.DeepEqual(got, want) {
+			return fmt.Sprintf("on the %d game state:\ngot    %+v\nwanted %+v", i, got, want)
+		}
+	}
+	return ""
 }
