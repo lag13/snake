@@ -4,10 +4,9 @@ package snake
 import (
 	"math/rand"
 	"time"
-)
 
-// TODO: Some logic in this package (like directions and points)
-// should be moved into a separate package.
+	"github.com/lag13/snake/go/geom2d"
+)
 
 // PlayerAction is an action a player can take when playing snake.
 type PlayerAction int
@@ -24,30 +23,18 @@ const (
 	NewGame
 )
 
-// direction is a direction in 2D space.
-type direction struct {
-	X int
-	Y int
-}
-
-// Point is a position in 2D space.
-type Point struct {
-	X int
-	Y int
-}
-
 // GameState represents the state of the game of snake which gets
 // drawn.
 type GameState struct {
 	Width      int
 	Height     int
-	Snake      []Point
-	Food       Point
+	Snake      []geom2d.Point
+	Food       geom2d.Point
 	Paused     bool
 	Score      int
 	GameIsWon  bool
 	GameIsLost bool
-	curDir     direction
+	curDir     geom2d.Vector
 }
 
 // renderer renders the game of snake. It exists because I plan to
@@ -60,7 +47,7 @@ func initGameState(width int, height int, rng *rand.Rand) GameState {
 	gameState := GameState{
 		Width:  width,
 		Height: height,
-		Snake: []Point{
+		Snake: []geom2d.Point{
 			{X: 0, Y: 1},
 			{X: 0, Y: 0},
 			{X: 1, Y: 0},
@@ -100,12 +87,12 @@ func Play(width int, height int, rngSrc rand.Source, r renderer, playerActions <
 	}
 }
 
-func getValidInput(playerActions <-chan PlayerAction, curDir direction) (PlayerAction, direction) {
+func getValidInput(playerActions <-chan PlayerAction, curDir geom2d.Vector) (PlayerAction, geom2d.Vector) {
 	for {
 		select {
 		case input := <-playerActions:
 			newDir := playerActionToDirection(input)
-			if directionsAreOrthogonal(curDir, newDir) {
+			if geom2d.AreOrthogonal(curDir, newDir) {
 				return input, newDir
 			}
 		default:
@@ -114,27 +101,23 @@ func getValidInput(playerActions <-chan PlayerAction, curDir direction) (PlayerA
 	}
 }
 
-func playerActionToDirection(p PlayerAction) direction {
+func playerActionToDirection(p PlayerAction) geom2d.Vector {
 	if p == Up {
-		return direction{X: 0, Y: -1}
+		return geom2d.Vector{X: 0, Y: -1}
 	}
 	if p == Down {
-		return direction{X: 0, Y: 1}
+		return geom2d.Vector{X: 0, Y: 1}
 	}
 	if p == Left {
-		return direction{X: -1, Y: 0}
+		return geom2d.Vector{X: -1, Y: 0}
 	}
 	if p == Right {
-		return direction{X: 1, Y: 0}
+		return geom2d.Vector{X: 1, Y: 0}
 	}
-	return direction{}
+	return geom2d.Vector{}
 }
 
-func directionsAreOrthogonal(d1 direction, d2 direction) bool {
-	return d1.X*d2.X+d1.Y*d2.Y == 0
-}
-
-func updateGameState(gameState GameState, action PlayerAction, newDir direction, r *rand.Rand) GameState {
+func updateGameState(gameState GameState, action PlayerAction, newDir geom2d.Vector, r *rand.Rand) GameState {
 	if action == Pause {
 		gameState.Paused = !gameState.Paused
 		return gameState
@@ -144,7 +127,7 @@ func updateGameState(gameState GameState, action PlayerAction, newDir direction,
 	}
 	gameState.curDir = newDir
 	snakeLen := len(gameState.Snake)
-	newHead := addPointAndDir(gameState.Snake[snakeLen-1], gameState.curDir)
+	newHead := geom2d.MovePoint(gameState.Snake[snakeLen-1], gameState.curDir)
 	if newHead == gameState.Food {
 		gameState.Score++
 		gameState.Snake = append(gameState.Snake, newHead)
@@ -158,20 +141,16 @@ func updateGameState(gameState GameState, action PlayerAction, newDir direction,
 	return gameState
 }
 
-func addPointAndDir(p Point, d direction) Point {
-	return Point{X: p.X + d.X, Y: p.Y + d.Y}
-}
-
-func genFood(gameState GameState, r *rand.Rand) Point {
+func genFood(gameState GameState, r *rand.Rand) geom2d.Point {
 	if gameState.GameIsWon || gameState.GameIsLost {
-		return Point{X: -1, Y: -1}
+		return geom2d.Point{X: -1, Y: -1}
 	}
 	whichPoint := r.Int31n(int32(gameState.Width*gameState.Height - len(gameState.Snake)))
 	var i int32 = 0
 	for y := 0; y < gameState.Height; y++ {
 		for x := 0; x < gameState.Width; x++ {
-			p := Point{X: x, Y: y}
-			if containsPoint(gameState.Snake, p) {
+			p := geom2d.Point{X: x, Y: y}
+			if geom2d.ContainsPoint(gameState.Snake, p) {
 				continue
 			}
 			if i == whichPoint {
@@ -180,16 +159,10 @@ func genFood(gameState GameState, r *rand.Rand) Point {
 			i++
 		}
 	}
-	return Point{-2, -2}
-}
-
-func containsPoint(ps []Point, q Point) bool {
-	for _, p := range ps {
-		if p == q {
-			return true
-		}
-	}
-	return false
+	// This should never be reached. TODO: Is there a better way
+	// to structure this so we don't have this unreachable return
+	// statement?
+	return geom2d.Point{-2, -2}
 }
 
 func gameIsWon(gameState GameState) bool {
