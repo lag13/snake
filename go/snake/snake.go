@@ -6,6 +6,9 @@ import (
 	"time"
 )
 
+// TODO: Some logic in this package (like directions and points)
+// should be moved into a separate package.
+
 // PlayerAction is an action a player can take when playing snake.
 type PlayerAction int
 
@@ -44,6 +47,7 @@ type GameState struct {
 	Score      int
 	GameIsWon  bool
 	GameIsLost bool
+	curDir     direction
 }
 
 // renderer renders the game of snake. It exists because I plan to
@@ -52,7 +56,7 @@ type renderer interface {
 	Render(g GameState)
 }
 
-func initGameState(width int, height int, rng *rand.Rand) (GameState, direction) {
+func initGameState(width int, height int, rng *rand.Rand) GameState {
 	gameState := GameState{
 		Width:  width,
 		Height: height,
@@ -62,33 +66,37 @@ func initGameState(width int, height int, rng *rand.Rand) (GameState, direction)
 			{X: 1, Y: 0},
 			{X: 1, Y: 1},
 		},
+		curDir: playerActionToDirection(Down),
 	}
-	gameState.GameIsWon = gameIsWon(gameState)
-	gameState.GameIsLost = gameIsLost(gameState)
 	gameState.Food = genFood(gameState, rng)
-	return gameState, direction{X: 0, Y: 1}
+	return gameState
 }
 
+// Play plays snake. TODO: I said it in my test for this function and
+// I'll say it again here. I feel like there is a better way to
+// organize this code. Maybe the Quit|NewGame aspects can be pulled
+// out into their own package thereby reducing logic? That would free
+// up this loop so it can only continue while the game is not lost.
 func Play(width int, height int, rngSrc rand.Source, r renderer, playerActions <-chan PlayerAction, sleepDur time.Duration) {
 	rng := rand.New(rngSrc)
-	gameState, curDir := initGameState(width, height, rng)
+	gameState := initGameState(width, height, rng)
 	for {
+		gameState.GameIsWon = gameIsWon(gameState)
+		gameState.GameIsLost = gameIsLost(gameState)
 		r.Render(gameState)
 		time.Sleep(sleepDur)
-		input, newDir := getValidInput(playerActions, curDir)
-		if input == Quit {
+		action, newDir := getValidInput(playerActions, gameState.curDir)
+		if action == Quit {
 			break
-		} else if input == Pause {
-			gameState.Paused = !gameState.Paused
-		} else if input == NewGame {
-			gameState, curDir = initGameState(width, height, rng)
+		}
+		if action == NewGame {
+			gameState = initGameState(width, height, rng)
 			continue
-		} else {
-			curDir = newDir
 		}
-		if !gameState.GameIsWon && !gameState.GameIsLost {
-			gameState = updateGameState(gameState, curDir, rng)
+		if gameState.GameIsWon || gameState.GameIsLost {
+			continue
 		}
+		gameState = updateGameState(gameState, action, newDir, rng)
 	}
 }
 
@@ -96,9 +104,6 @@ func getValidInput(playerActions <-chan PlayerAction, curDir direction) (PlayerA
 	for {
 		select {
 		case input := <-playerActions:
-			if input == Quit || input == Pause || input == NewGame {
-				return input, direction{}
-			}
 			newDir := playerActionToDirection(input)
 			if directionsAreOrthogonal(curDir, newDir) {
 				return input, newDir
@@ -129,12 +134,17 @@ func directionsAreOrthogonal(d1 direction, d2 direction) bool {
 	return d1.X*d2.X+d1.Y*d2.Y == 0
 }
 
-func updateGameState(gameState GameState, curDir direction, r *rand.Rand) GameState {
+func updateGameState(gameState GameState, action PlayerAction, newDir direction, r *rand.Rand) GameState {
+	if action == Pause {
+		gameState.Paused = !gameState.Paused
+		return gameState
+	}
 	if gameState.Paused {
 		return gameState
 	}
+	gameState.curDir = newDir
 	snakeLen := len(gameState.Snake)
-	newHead := addPointAndDir(gameState.Snake[snakeLen-1], curDir)
+	newHead := addPointAndDir(gameState.Snake[snakeLen-1], gameState.curDir)
 	if newHead == gameState.Food {
 		gameState.Score++
 		gameState.Snake = append(gameState.Snake, newHead)
@@ -145,8 +155,6 @@ func updateGameState(gameState GameState, curDir direction, r *rand.Rand) GameSt
 		}
 		gameState.Snake[snakeLen-1] = newHead
 	}
-	gameState.GameIsLost = gameIsLost(gameState)
-	gameState.GameIsWon = gameIsWon(gameState)
 	return gameState
 }
 

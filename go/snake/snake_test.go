@@ -29,8 +29,10 @@ func (m *mockRenderer) Render(g snake.GameState) {
 // inputs to effect the game and if that channel doesn't end in a Quit
 // then the test will loop forever. I wonder if that "quitting" and
 // "restarting" logic should go into a separate package? Or just a
-// better way to structure things? These tests are so difficult that
-// I'm stopping writing them.
+// better way to structure things? These tests are so
+// difficult/not-useful that I'm not writing them anymore. Since these
+// tests are so difficult to write I feel like there must be a better
+// way to design this code, think of it and do so.
 func TestPlay(t *testing.T) {
 	tests := []struct {
 		testScenario         string
