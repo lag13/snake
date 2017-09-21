@@ -9,7 +9,6 @@ endfunction
 function! s:initGame()
     call s:openEmptyCanvas()
     let initGameState = s:initGameState()
-    call s:drawBoard(initGameState["height"], initGameState["width"])
     return initGameState
 endfunction
 
@@ -38,7 +37,7 @@ function! s:initGameState()
     call s:seedRNG(localtime())
     let height = min([15, &lines-1])
     let width = min([15, &columns])
-    let snake_body = [[1, 1]]
+    let snake_body = [[2, 2], [1, 2], [1, 1], [2, 1]]
     return s:newGameState(height, width, snake_body, [1, 0], s:generateFoodPos(snake_body, height, width))
 endfunction
 
@@ -56,22 +55,12 @@ function! s:newGameState(height, width, snake_body, cur_dir, food_pos)
                 \ }
 endfunction
 
-function! s:drawBoard(height, width)
-    for y in range(1, a:height)
-        call setline(y, repeat(' ', a:width) . '|')
-    endfor
-    call setline(a:height+1, repeat('-', a:width) . '+')
-    " This emtpy line will be where the score goes
-    normal! Go
-    redraw
-endfunction
-
 function! s:gameLoop(gameState)
     let gs = a:gameState
     while !s:gameShouldEnd(gs["cur_dir"], gs["height"], gs["width"], gs["snake_body"])
         call s:drawGame(gs["height"], gs["width"], gs["snake_body"], gs["food_pos"])
         let gs = s:updateGameState(gs)
-        sleep 90ms
+        sleep 100ms
     endwhile
 endfunction
 
@@ -106,7 +95,7 @@ function! s:outOfBounds(snake_head, height, width)
 endfunction
 
 function! s:drawGame(height, width, snake_body, food_pos)
-    call s:clearBoard(a:height, a:width)
+    call s:drawBoard(a:height, a:width)
     call s:drawSnake(a:snake_body)
     call s:drawFood(a:food_pos)
     call s:drawScore(a:snake_body)
@@ -116,9 +105,11 @@ function! s:drawGame(height, width, snake_body, food_pos)
     redraw
 endfunction
 
-function! s:clearBoard(height, width)
-    call cursor(1, 1)
-    execute "normal! \<C-v>".(a:width-1)."l".(a:height-1)."jr "
+function! s:drawBoard(height, width)
+    normal! ggdG
+    for y in range(1, a:height)
+        call setline(y, repeat(". ", a:width))
+    endfor
 endfunction
 
 function! s:drawSnake(snake_body)
@@ -128,7 +119,7 @@ function! s:drawSnake(snake_body)
 endfunction
 
 function! s:drawChar(char_to_draw, pos)
-    call cursor(a:pos)
+    call cursor(a:pos[0], (a:pos[1]-1)*2+1)
     execute "normal r".a:char_to_draw
 endfunction
 
@@ -137,7 +128,7 @@ function! s:drawFood(food_pos)
 endfunction
 
 function! s:drawScore(snake_body)
-    execute "normal! GccScore: ".(len(a:snake_body)-1)."\<ESC>"
+    execute "normal! GoScore: ".(len(a:snake_body)-1)."\<ESC>"
 endfunction
 
 function! s:updateGameState(gameState)
