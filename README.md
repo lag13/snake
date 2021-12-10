@@ -1,3 +1,5 @@
+Making sure emacs can push to github too.
+
 # Snake
 Making the game snake in different programming languages.
 
